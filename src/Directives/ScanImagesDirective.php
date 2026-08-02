@@ -35,14 +35,15 @@ use RuntimeException;
  * // Scan with hash generation
  * ./bin/app images:scan images --hash
  *
+ * // Scan with custom output file
+ * ./bin/app images:scan images custom/scan-result.json 2
+ *
  * // Using alias
  * ./bin/app ims images
  */
 final class ScanImagesDirective extends AbstractDirective
 {
     private const DEFAULT_OUTPUT_FORMAT = 'json';
-
-    private const SUPPORTED_OUTPUT_FORMATS = ['json', 'array'];
 
     private FileSystemInterface $fileSystem;
 
@@ -55,6 +56,7 @@ final class ScanImagesDirective extends AbstractDirective
     {
         return 'images:scan 
                 {source}#"Source directory to scan for images" 
+                {output-file=?}#"Custom output file path (relative to storage or absolute)" 
                 {depth=0}#"Maximum depth to scan (0 = unlimited)" 
                 {::output->[json,array]=json}#"Output format" 
                 {extensions*}#"Image extensions to include (png, jpg, webp, ...)" 
@@ -162,6 +164,7 @@ final class ScanImagesDirective extends AbstractDirective
      *     depth: int,
      *     extensions: array<string>,
      *     excludes: array<string>,
+     *     outputFile: string|null,
      *     hash: bool,
      *     excludeCompressed: bool
      * }
@@ -184,6 +187,7 @@ final class ScanImagesDirective extends AbstractDirective
             'depth' => (int) ($this->getArgument('depth') ?? 0),
             'extensions' => ! empty($extensions) ? array_map('strtolower', $extensions) : [],
             'excludes' => $excludes ?? [],
+            'outputFile' => $this->getArgument('output-file'),
             'hash' => $this->getFlag('hash'),
             'excludeCompressed' => $this->getFlag('exclude-compressed'),
         ];
@@ -404,8 +408,23 @@ final class ScanImagesDirective extends AbstractDirective
     private function saveOutput(string $output, array $config): string
     {
         $outputFormat = $config['output'];
-        $extension = $outputFormat === 'array' ? 'php' : 'json';
+        $customOutputFile = $config['outputFile'];
 
+        // Si un fichier de sortie personnalisé est fourni, l'utiliser
+        if ($customOutputFile !== null && $customOutputFile !== '') {
+            $path = $this->resolveOutputPath($customOutputFile, $outputFormat);
+
+            // Créer le dossier parent si nécessaire
+            $this->fileSystem->ensureDirectoryExists(dirname($path));
+
+            // Écrire le fichier
+            $this->fileSystem->put($path, $output);
+
+            return $path;
+        }
+
+        // Sinon, utiliser le comportement par défaut
+        $extension = $outputFormat === 'array' ? 'php' : 'json';
         $filename = 'scan_result_'.date('Y-m-d_H-i-s').'.'.$extension;
         $path = storage_path('app/public/'.$filename);
 
@@ -413,6 +432,29 @@ final class ScanImagesDirective extends AbstractDirective
         $this->fileSystem->put($path, $output);
 
         return $path;
+    }
+
+    /**
+     * Résout le chemin de sortie personnalisé.
+     *
+     * @param  string  $path  Le chemin personnalisé (relatif ou absolu)
+     * @param  string  $format  Le format de sortie (json, array)
+     * @return string Le chemin absolu résolu
+     */
+    private function resolveOutputPath(string $path, string $format): string
+    {
+        // Si le chemin est déjà absolu, le retourner
+        if (str_starts_with($path, '/')) {
+            return $path;
+        }
+
+        // Si le chemin est relatif et commence par storage/, le résoudre
+        if (str_starts_with($path, 'storage/')) {
+            return base_path($path);
+        }
+
+        // Si le chemin est relatif, le placer dans storage/app/public/
+        return storage_path('app/public/'.$path);
     }
 
     /**
@@ -424,12 +466,10 @@ final class ScanImagesDirective extends AbstractDirective
      */
     private function getRelativePath(string $file, string $basePath): string
     {
-        // Si le fichier est dans le basePath, on garde la structure relative
         if (str_starts_with($file, $basePath)) {
             return ltrim(substr($file, strlen($basePath)), DIRECTORY_SEPARATOR);
         }
 
-        // Fallback: retourner le chemin complet
         return $file;
     }
 }

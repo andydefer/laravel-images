@@ -203,6 +203,238 @@ final class ScanImagesDirectiveTest extends IntegrationTestCase
     }
 
     // ============================================================
+    // OUTPUT FILE CUSTOM PATH TESTS
+    // ============================================================
+
+    public function test_scan_with_custom_output_file_relative(): void
+    {
+        // Arrange
+        $this->createTestImage('image1.jpg', 800, 600, 'jpg');
+
+        $source = 'images/test';
+        $customPath = 'custom/scan-result.json';
+
+        // Act
+        $response = $this->service->run("images:scan {$source} {$customPath}");
+
+        // Assert
+        $this->assertSame(ExitCode::SUCCESS, $response->exit_code);
+        $this->assertStringContainsString('💾 Output saved to:', $response->output);
+
+        $expectedPath = storage_path('app/public/'.$customPath);
+        $this->assertFileExists($expectedPath);
+
+        $content = json_decode(file_get_contents($expectedPath), true);
+        $this->assertIsArray($content);
+        $this->assertCount(1, $content);
+        $this->assertArrayHasKey('filename', $content[0]);
+        $this->assertEquals('image1.jpg', $content[0]['filename']);
+    }
+
+    public function test_scan_with_custom_output_file_absolute(): void
+    {
+        // Arrange
+        $this->createTestImage('image1.jpg', 800, 600, 'jpg');
+
+        $source = 'images/test';
+        $customPath = storage_path('app/public/absolute/result.json');
+
+        // Act
+        $response = $this->service->run("images:scan {$source} {$customPath}");
+
+        // Assert
+        $this->assertSame(ExitCode::SUCCESS, $response->exit_code);
+        $this->assertStringContainsString('💾 Output saved to:', $response->output);
+
+        $this->assertFileExists($customPath);
+
+        $content = json_decode(file_get_contents($customPath), true);
+        $this->assertIsArray($content);
+        $this->assertCount(1, $content);
+        $this->assertArrayHasKey('filename', $content[0]);
+        $this->assertEquals('image1.jpg', $content[0]['filename']);
+    }
+
+    public function test_scan_with_custom_output_file_php_array(): void
+    {
+        // Arrange
+        $this->createTestImage('image1.jpg', 800, 600, 'jpg');
+
+        $source = 'images/test';
+        $customPath = 'custom/scan-result.php';
+
+        // Act
+        $response = $this->service->run("images:scan {$source} {$customPath} _ array");
+
+        // Assert
+        $this->assertSame(ExitCode::SUCCESS, $response->exit_code);
+        $this->assertStringContainsString('💾 Output saved to:', $response->output);
+
+        $expectedPath = storage_path('app/public/'.$customPath);
+        $this->assertFileExists($expectedPath);
+
+        $content = file_get_contents($expectedPath);
+        $this->assertStringContainsString('<?php', $content);
+        $this->assertStringContainsString('return [', $content);
+
+        $data = include $expectedPath;
+        $this->assertIsArray($data);
+        $this->assertCount(1, $data);
+        $this->assertArrayHasKey('filename', $data[0]);
+        $this->assertEquals('image1.jpg', $data[0]['filename']);
+    }
+
+    public function test_scan_with_custom_output_file_creates_directory(): void
+    {
+        // Arrange
+        $this->createTestImage('image1.jpg', 800, 600, 'jpg');
+
+        $source = 'images/test';
+        $customPath = 'deep/nested/custom/scan-result.json';
+
+        // Act
+        $response = $this->service->run("images:scan {$source} {$customPath}");
+
+        // Assert
+        $this->assertSame(ExitCode::SUCCESS, $response->exit_code);
+        $this->assertStringContainsString('💾 Output saved to:', $response->output);
+
+        $expectedPath = storage_path('app/public/'.$customPath);
+        $this->assertFileExists($expectedPath);
+
+        $content = json_decode(file_get_contents($expectedPath), true);
+        $this->assertIsArray($content);
+        $this->assertCount(1, $content);
+        $this->assertArrayHasKey('filename', $content[0]);
+        $this->assertEquals('image1.jpg', $content[0]['filename']);
+    }
+
+    public function test_scan_with_custom_output_file_and_depth(): void
+    {
+        // Arrange
+        $this->createTestImage('root.jpg', 800, 600, 'jpg');
+        $this->createSubDirectory('sub1');
+        $this->createTestImage('sub1/image1.jpg', 800, 600, 'jpg');
+        $this->createSubDirectory('sub1/sub2');
+        $this->createTestImage('sub1/sub2/image2.jpg', 800, 600, 'jpg');
+
+        $source = 'images/test';
+        $customPath = 'custom/scan-depth.json';
+
+        // Act
+        $response = $this->service->run("images:scan {$source} {$customPath} 1");
+
+        // Assert
+        $this->assertSame(ExitCode::SUCCESS, $response->exit_code);
+        $this->assertStringContainsString('💾 Output saved to:', $response->output);
+        $this->assertStringContainsString('📊 Found: 2 images', $response->output);
+
+        $expectedPath = storage_path('app/public/'.$customPath);
+        $this->assertFileExists($expectedPath);
+
+        $content = json_decode(file_get_contents($expectedPath), true);
+        $this->assertCount(2, $content);
+    }
+
+    public function test_scan_with_custom_output_file_and_extensions(): void
+    {
+        // Arrange
+        $this->createTestImage('image1.jpg', 800, 600, 'jpg');
+        $this->createTestImage('image2.png', 800, 600, 'png');
+        $this->createTestImage('image3.webp', 800, 600, 'png');
+
+        $source = 'images/test';
+        $customPath = 'custom/scan-extensions.json';
+
+        // Act
+        $response = $this->service->run("images:scan {$source} {$customPath} 0 json [png,jpg]");
+
+        // Assert
+        $this->assertSame(ExitCode::SUCCESS, $response->exit_code);
+        $this->assertStringContainsString('💾 Output saved to:', $response->output);
+        $this->assertStringContainsString('📊 Found: 2 images', $response->output);
+
+        $expectedPath = storage_path('app/public/'.$customPath);
+        $this->assertFileExists($expectedPath);
+
+        $content = json_decode(file_get_contents($expectedPath), true);
+        $this->assertCount(2, $content);
+
+        $extensions = array_column($content, 'extension');
+        $this->assertContains('jpg', $extensions);
+        $this->assertContains('png', $extensions);
+        $this->assertNotContains('webp', $extensions);
+    }
+
+    public function test_scan_with_custom_output_file_and_hash(): void
+    {
+        // Arrange
+        $this->createTestImage('image.jpg', 800, 600, 'jpg');
+
+        $source = 'images/test';
+        $customPath = 'custom/scan-hash.json';
+
+        // Act
+        $response = $this->service->run("images:scan {$source} {$customPath} 0 json --hash");
+
+        // Assert
+        $this->assertSame(ExitCode::SUCCESS, $response->exit_code);
+        $this->assertStringContainsString('💾 Output saved to:', $response->output);
+
+        $expectedPath = storage_path('app/public/'.$customPath);
+        $this->assertFileExists($expectedPath);
+
+        $content = json_decode(file_get_contents($expectedPath), true);
+        $this->assertCount(1, $content);
+        $this->assertArrayHasKey('hash', $content[0]);
+        $this->assertNotEmpty($content[0]['hash']);
+    }
+
+    public function test_scan_with_custom_output_file_and_all_options(): void
+    {
+        // Arrange
+        $this->createTestImage('root.jpg', 800, 600, 'jpg');
+        $this->createTestImage('root.png', 800, 600, 'png');
+
+        $this->createSubDirectory('sub1');
+        $this->createTestImage('sub1/image1.jpg', 800, 600, 'jpg');
+        $this->createTestImage('sub1/image2.png', 800, 600, 'png');
+
+        $this->createSubDirectory('compressed');
+        $this->createTestImage('compressed/img.jpg', 800, 600, 'jpg');
+
+        $source = 'images/test';
+        $customPath = 'custom/scan-all.json';
+
+        // Act
+        $response = $this->service->run(
+            "images:scan {$source} {$customPath} 1 json [png,jpg] [compressed] --hash"
+        );
+
+        // Assert
+        $this->assertSame(ExitCode::SUCCESS, $response->exit_code);
+
+        $this->assertStringContainsString('📊 Found: 4 images', $response->output);
+        $this->assertStringContainsString('💾 Output saved to:', $response->output);
+        $this->assertStringContainsString('✅ Scan completed', $response->output);
+
+        $expectedPath = storage_path('app/public/'.$customPath);
+        $this->assertFileExists($expectedPath);
+
+        $content = json_decode(file_get_contents($expectedPath), true);
+
+        $this->assertCount(4, $content);
+
+        foreach ($content as $image) {
+            $this->assertArrayHasKey('hash', $image);
+        }
+
+        foreach ($content as $image) {
+            $this->assertStringNotContainsString('/compressed/', $image['path']);
+        }
+    }
+
+    // ============================================================
     // DEPTH FILTER TESTS
     // ============================================================
 
@@ -218,7 +450,7 @@ final class ScanImagesDirectiveTest extends IntegrationTestCase
         $source = 'images/test';
 
         // Act
-        $response = $this->service->run("images:scan {$source} 1");
+        $response = $this->service->run("images:scan {$source} _ 1");
 
         // Assert
         $this->assertSame(ExitCode::SUCCESS, $response->exit_code);
@@ -267,7 +499,7 @@ final class ScanImagesDirectiveTest extends IntegrationTestCase
         $source = 'images/test';
 
         // Act
-        $response = $this->service->run("images:scan {$source} 0 json [png,jpg]");
+        $response = $this->service->run("images:scan {$source} _ 0 json [png,jpg]");
 
         // Assert
         $this->assertSame(ExitCode::SUCCESS, $response->exit_code);
@@ -315,7 +547,7 @@ final class ScanImagesDirectiveTest extends IntegrationTestCase
         $source = 'images/test';
 
         // Act
-        $response = $this->service->run("images:scan {$source} 0 json [] [compressed,thumbnails]");
+        $response = $this->service->run("images:scan {$source} _ 0 json [] [compressed,thumbnails]");
 
         // Assert
         $this->assertSame(ExitCode::SUCCESS, $response->exit_code);
@@ -623,7 +855,7 @@ final class ScanImagesDirectiveTest extends IntegrationTestCase
 
         // Act
         $response = $this->service->run(
-            "images:scan {$source} 1 json [png,jpg] [compressed] --hash"
+            "images:scan {$source} _  json [png,jpg] [compressed] --hash"
         );
 
         // Assert
