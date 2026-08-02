@@ -1,10 +1,4 @@
-Tu as raison ! Ces traits `HasImages` et `HasAlbums` **n'existent pas** dans le package. C'est une erreur de ma part, j'ai inventé ces traits.
-
-Voici la correction :
-
----
-
-# Laravel Images - Documentation (CORRIGÉE)
+# Laravel Images - Documentation
 
 ## Table des matières
 
@@ -32,6 +26,7 @@ composer require andydefer/laravel-images
 - PHP 8.1 ou supérieur
 - Laravel 10.x, 11.x, 12.x, 13.x, 14.x ou 15.x
 - Extension GD (par défaut) ou Imagick
+- `pngquant` et `jpegoptim` pour la compression CLI (optionnel)
 
 ### Publier les migrations
 
@@ -449,14 +444,16 @@ Créez votre propre point d'entrée CLI ou utilisez le binaire fourni.
 
 | Paramètre | Description |
 |-----------|-------------|
-| `{source}` | Dossier source contenant les images à compresser |
+| `{source}` | Dossier source contenant les images à compresser (relatif au disque de stockage) |
 | `{destination?}` | Dossier de destination (source si omis) |
 | `{png-quality=45-50}` | Plage de qualité PNG (min-max, ex: 30-40) |
 | `{jpg-quality=50}` | Qualité JPEG (0-100) |
+| `{max-size=0}` | Ignorer les images plus petites que N KB (0 = désactivé) |
 | `{--strip-meta}` | Supprime les métadonnées (Exif, commentaires, etc.) |
 | `{--recursive}` | Traite les sous-dossiers récursivement |
 | `{--dry-run}` | Simule la compression sans modifier les fichiers |
 | `{--force}` | Force l'écrasement des fichiers existants |
+| `{--skip-compressed}` | Ignore les images déjà compressées |
 
 **Exemples :**
 
@@ -469,6 +466,12 @@ Créez votre propre point d'entrée CLI ou utilisez le binaire fourni.
 
 # Compression récursive avec paramètres avancés
 ./bin/images images:compress storage/app/public/images --recursive --strip-meta --png-quality=30-40 --jpg-quality=40
+
+# Ignorer les images déjà compressées
+./bin/images images:compress storage/app/public/images --skip-compressed
+
+# Ignorer les images plus petites que 50KB
+./bin/images images:compress storage/app/public/images max-size=50
 
 # Simulation (dry-run)
 ./bin/images images:compress storage/app/public/images --dry-run
@@ -487,6 +490,41 @@ sudo apt install pngquant jpegoptim
 
 # macOS
 brew install pngquant jpegoptim
+```
+
+### 8.4 Détection des images déjà compressées
+
+La directive détecte automatiquement les images déjà compressées via :
+
+- **Taille** : Images < 10KB considérées comme compressées
+- **JPEG** : Absence de métadonnées Exif
+- **PNG** : Ratio de métadonnées faible (chunks standards)
+
+### 8.5 Exemple de sortie
+
+```bash
+$ ./bin/images images:compress images --skip-compressed
+
+📷 Starting image compression...
+
+✅ Source directory: images
+📁 Found 42 images to process
+
+   ✅ images/photo1.jpg - saved 120.5 KB (65.2%)
+   ⏭️  images/photo2.png - already compressed, skipping
+   ✅ images/photo3.jpg - saved 45.2 KB (52.8%)
+   ⏭️  images/photo4.png - already compressed, skipping
+
+⏭️  Skipped 12 already compressed images
+
+📊 Summary:
+   📁 Files processed: 30
+   ⏭️  Files skipped: 12
+   📦 Size before: 15.24 MB
+   📦 Size after: 5.67 MB
+   💾 Space saved: 9.57 MB (62.8%)
+
+✅ Compression completed
 ```
 
 ---
@@ -645,6 +683,18 @@ class ImageExportService
 }
 ```
 
+### 9.4 Compression via CLI
+
+```bash
+# Compression optimisée pour le web
+./bin/images images:compress storage/app/public/images storage/app/public/optimized \
+    --recursive \
+    --strip-meta \
+    --png-quality=30-40 \
+    --jpg-quality=40 \
+    --skip-compressed
+```
+
 ---
 
 ## 10. API Référence
@@ -718,3 +768,4 @@ class ImageExportService
 ## Licence
 
 MIT © [Andy Defer](https://github.com/andydefer)
+---
