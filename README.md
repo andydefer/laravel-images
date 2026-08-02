@@ -1,467 +1,648 @@
-# Laravel Likes
+# LaravelImages - Documentation
 
-> Système de réactions polymorphiques pour applications Laravel
+## Table des matières
 
-Un package Laravel complet pour gérer des réactions polymorphiques (likes, loves, haha, wow, sad, angry) avec le pattern Repository, des DTOs, des Value Objects et un système de toggle intelligent.
-
----
-
-## 📋 Table des matières
-
-- [Fonctionnalités](#fonctionnalités)
-- [Prérequis](#prérequis)
-- [Installation](#installation)
-- [Configuration](#configuration)
-- [Utilisation](#utilisation)
-  - [Toggle une réaction](#toggle-une-réaction)
-  - [Ajouter un like](#ajouter-un-like)
-  - [Supprimer un like](#supprimer-un-like)
-  - [Vérifier une réaction](#vérifier-une-réaction)
-  - [Compter les réactions](#compter-les-réactions)
-  - [Récupérer les réactions](#récupérer-les-réactions)
-  - [Filtrer par date](#filtrer-par-date)
-- [Types de réactions](#types-de-réactions)
-- [Référence de l'API](#référence-de-lapi)
-- [Value Objects](#value-objects)
-- [Structure de la base de données](#structure-de-la-base-de-données)
-- [Tests](#tests)
-- [Contribuer](#contribuer)
-- [Licence](#licence)
+1. [Installation](#1-installation)
+2. [Configuration](#2-configuration)
+3. [Concepts de base](#3-concepts-de-base)
+4. [Gestion des images](#4-gestion-des-images)
+5. [Gestion des albums](#5-gestion-des-albums)
+6. [Processeurs d'images](#6-processeurs-dimages)
+7. [Stockage](#7-stockage)
+8. [Exemples complets](#8-exemples-complets)
+9. [API Référence](#9-api-référence)
 
 ---
 
-## ✨ Fonctionnalités
-
-- ✅ **Double polymorphisme** - Réagissez à n'importe quel modèle avec n'importe quel utilisateur
-- ✅ **6 types de réactions** - LIKE, LOVE, HAHA, WOW, SAD, ANGRY avec emojis
-- ✅ **Toggle intelligent** - Changez de réaction en un seul appel
-- ✅ **Filtrage temporel** - Récupérez les réactions après une date donnée
-- ✅ **Pattern Repository** - Séparation propre de la logique d'accès aux données
-- ✅ **Support des DTOs** - Objets de transfert de données typés
-- ✅ **Value Objects** - DateTime, Métadonnées
-- ✅ **Support des métadonnées** - Stockez des données supplémentaires au format JSON
-- ✅ **Suppression douce** - Suppression sécurisée avec possibilité de restauration
-- ✅ **Filtrage avancé** - Filtrez par type, par auteur, par objet
-- ✅ **Tests complets** - Couverture complète des tests d'intégration
-
----
-
-## 🚀 Prérequis
-
-- PHP 8.2 ou supérieur
-- Laravel 12.0, 13.0, 14.0 ou 15.0
-
----
-
-## 📦 Installation
-
-Installez le package via Composer :
+## 1. Installation
 
 ```bash
-composer require andydefer/laravel-likes
+composer require andydefer/laravel-images
 ```
+
+### Prérequis
+
+- PHP 8.1 ou supérieur
+- Laravel 10.x, 11.x, 12.x, 13.x, 14.x ou 15.x
+- Extension GD (par défaut) ou Imagick
 
 ### Publier les migrations
 
 ```bash
-php artisan vendor:publish --tag=Likes-migrations
-```
-
-### Exécuter les migrations
-
-```bash
+php artisan vendor:publish --tag=images-migrations
 php artisan migrate
 ```
 
----
+### Publier la configuration
 
-## ⚙️ Configuration
-
-Le package est automatiquement découvert par Laravel. Aucune configuration supplémentaire n'est requise.
-
-Si vous devez personnaliser le Service Provider, ajoutez-le manuellement dans `config/app.php` :
-
-```php
-'providers' => [
-    // ...
-    AndyDefer\LaravelImages\LikesServiceProvider::class,
-],
+```bash
+php artisan vendor:publish --tag=images-config
 ```
 
 ---
 
-## 📖 Utilisation
+## 2. Configuration
 
-### Toggle une réaction
-
-La méthode `toggle()` est la plus polyvalente. Elle permet de :
-- Ajouter une réaction si elle n'existe pas
-- Changer de type de réaction si elle existe déjà
-- Supprimer la réaction si le même type est utilisé
+### Fichier de configuration
 
 ```php
-use AndyDefer\LaravelImages\Services\LikeService;
-use AndyDefer\LaravelImages\Enums\LikeType;
+// config/images.php
+return [
+    // Driver du processeur d'images
+    'driver' => env('IMAGE_DRIVER', 'gd'), // ou 'imagick'
+    
+    // Disque de stockage
+    'disk' => env('IMAGE_DISK', 'public'),
+];
+```
 
-class PostController extends Controller
+### Variables d'environnement
+
+```env
+IMAGE_DRIVER=gd
+IMAGE_DISK=public
+```
+
+---
+
+## 3. Concepts de base
+
+### 3.1 Image
+
+Une image est un modèle Eloquent qui représente un fichier image stocké sur le disque.
+
+```php
+use AndyDefer\LaravelImages\Models\Image;
+
+// Propriétés principales
+$image->id;           // ID unique
+$image->path;         // Chemin relatif (ImagePathVO)
+$image->filename;     // Nom du fichier
+$image->original_filename; // Nom original
+$image->extension;    // Extension (jpg, png, etc.)
+$image->mime_type;    // Type MIME
+$image->size;         // Taille en bytes
+$image->type;         // Type d'image (avatar, cover, gallery, etc.)
+$image->metadata;     // Métadonnées (ImageMetadataVO)
+$image->is_primary;   // Image principale
+$image->is_processed; // Traitée ou non
+$image->order;        // Ordre d'affichage
+```
+
+### 3.2 Album
+
+Un album regroupe plusieurs images avec un ordre défini.
+
+```php
+use AndyDefer\LaravelImages\Models\Album;
+
+$album->name;          // Nom de l'album
+$album->slug;          // Slug unique
+$album->description;   // Description
+$album->is_public;     // Public ou privé (BinaryChoice)
+$album->is_featured;   // Mis en avant (BinaryChoice)
+$album->images;        // Images de l'album
+$album->coverImage;    // Image de couverture
+```
+
+### 3.3 Relations polymorphiques
+
+Les images et albums peuvent être attachés à n'importe quel modèle Eloquent :
+
+```php
+use AndyDefer\LaravelImages\Traits\HasImages;
+use AndyDefer\LaravelImages\Traits\HasAlbums;
+
+class User extends Model
 {
-    public function react(LikeService $likeService, Post $post)
-    {
-        $user = auth()->user();
-
-        // Toggle un like (👍)
-        $liked = $likeService->toggle($user, $post, LikeType::LIKE);
-
-        // Toggle un love (❤️)
-        $loved = $likeService->toggle($user, $post, LikeType::LOVE);
-
-        // Toggle un haha (😂)
-        $haha = $likeService->toggle($user, $post, LikeType::HAHA);
-
-        return response()->json([
-            'reacted' => $liked,
-            'type' => $liked ? LikeType::LIKE->value : null,
-            'emoji' => $liked ? LikeType::LIKE->getEmoji() : null,
-        ]);
-    }
+    use HasImages;  // Ajoute des méthodes pour gérer les images
+    use HasAlbums;  // Ajoute des méthodes pour gérer les albums
 }
 ```
 
-### Ajouter un like
-
-```php
-// Ajoute un like (👍) - Lève une exception si déjà liké
-$likeService->like($user, $post);
-```
-
-### Supprimer un like
-
-```php
-// Supprime un like - Lève une exception si non liké
-$likeService->unlike($user, $post);
-```
-
-### Vérifier une réaction
-
-```php
-// Vérifier si l'utilisateur a réagi
-$hasLiked = $likeService->hasLiked($user, $post);
-```
-
-### Compter les réactions
-
-```php
-// Compter toutes les réactions d'un objet
-$total = $likeService->countLikes($post);
-
-// Compter par type
-$likes = $likeService->countLikesByType($post, LikeType::LIKE);
-$loves = $likeService->countLikesByType($post, LikeType::LOVE);
-$hahas = $likeService->countLikesByType($post, LikeType::HAHA);
-```
-
-### Récupérer les réactions
-
-```php
-// Récupérer tous les likeurs d'un objet
-$likers = $likeService->getLikers($post);
-
-// Récupérer les likeurs par type
-$likersByType = $likeService->getLikersByType($post, LikeType::LOVE);
-
-// Récupérer toutes les réactions d'un utilisateur
-$userLikes = $likeService->getLikerLikes($user);
-
-// Récupérer les réactions d'un utilisateur par type
-$userLoves = $likeService->getLikerLikesByType($user, LikeType::LOVE);
-```
-
-### Filtrer par date
-
-```php
-use AndyDefer\PhpVo\ValueObjects\DateTimeVO;
-
-$date = DateTimeVO::from('2024-01-01 00:00:00');
-
-// Récupérer toutes les réactions mises à jour après une date
-$recentLikes = $likeService->getLikesUpdatedAfter($date);
-
-// Récupérer les réactions d'un utilisateur après une date
-$userRecentLikes = $likeService->getLikerLikesUpdatedAfter($user, $date);
-
-// Récupérer les réactions d'un objet après une date
-$postRecentLikes = $likeService->getLikesForLikeableUpdatedAfter($post, $date);
-```
-
 ---
 
-## 🏷️ Types de réactions
+## 4. Gestion des images
 
-| Type | Valeur | Emoji | Label |
-|------|--------|-------|-------|
-| `LikeType::LIKE` | `'like'` | 👍 | J'aime |
-| `LikeType::LOVE` | `'love'` | ❤️ | J'adore |
-| `LikeType::HAHA` | `'haha'` | 😂 | Haha |
-| `LikeType::WOW` | `'wow'` | 😮 | Wow |
-| `LikeType::SAD` | `'sad'` | 😢 | Triste |
-| `LikeType::ANGRY` | `'angry'` | 😡 | En colère |
-
-### Utilisation des émojis
+### 4.1 Upload d'une image
 
 ```php
-use AndyDefer\LaravelImages\Enums\LikeType;
+use AndyDefer\LaravelImages\Services\ImageService;
+use AndyDefer\LaravelImages\Enums\ImageType;
+use AndyDefer\LaravelImages\Records\ImageOptionsRecord;
 
-$type = LikeType::LOVE;
-echo $type->getEmoji();  // ❤️
-echo $type->getLabel();  // J'adore
-```
+$imageService = app(ImageService::class);
 
----
-
-## 📚 Référence de l'API
-
-### LikeService
-
-| Méthode | Description | Retourne |
-|---------|-------------|----------|
-| `toggle(Model $liker, Model $likeable, LikeType $type = LikeType::LIKE)` | Toggle une réaction (ajoute/change/supprime) | `bool` |
-| `like(Model $liker, Model $likeable)` | Ajoute un like (👍) | `void` |
-| `unlike(Model $liker, Model $likeable)` | Supprime un like | `void` |
-| `hasLiked(Model $liker, Model $likeable)` | Vérifie si l'utilisateur a réagi | `bool` |
-| `countLikes(Model $likeable)` | Compte toutes les réactions | `int` |
-| `countLikesByType(Model $likeable, LikeType $type)` | Compte les réactions par type | `int` |
-| `getLikers(Model $likeable)` | Récupère tous les likeurs | `Collection` |
-| `getLikersByType(Model $likeable, LikeType $type)` | Récupère les likeurs par type | `Collection` |
-| `getLikerLikes(Model $liker)` | Récupère les réactions d'un utilisateur | `Collection` |
-| `getLikerLikesByType(Model $liker, LikeType $type)` | Récupère les réactions d'un utilisateur par type | `Collection` |
-| `getLikesUpdatedAfter(DateTimeVO $date)` | Récupère les réactions après une date | `Collection` |
-| `getLikerLikesUpdatedAfter(Model $liker, DateTimeVO $date)` | Récupère les réactions d'un utilisateur après une date | `Collection` |
-| `getLikesForLikeableUpdatedAfter(Model $likeable, DateTimeVO $date)` | Récupère les réactions d'un objet après une date | `Collection` |
-
----
-
-## 🎯 Value Objects
-
-Le package supporte les Value Objects suivants :
-
-| Value Object | Description | Exemple |
-|--------------|-------------|---------|
-| `DateTimeVO` | Date/heure | `DateTimeVO::from('2024-01-01 12:00:00')` |
-| `StrictDataObject` | Métadonnées typées | `StrictDataObject::from(['key' => 'value'])` |
-
-### Accesseurs dans le modèle Like
-
-```php
-$like = Like::find(1);
-
-// Accès sous forme de Value Objects
-$createdAt = $like->getCreatedAt();    // DateTimeVO
-$updatedAt = $like->getUpdatedAt();    // DateTimeVO
-$deletedAt = $like->getDeletedAt();    // DateTimeVO
-$metadata = $like->getMetadata();      // StrictDataObject
-$type = $like->getType();              // LikeType
-
-// Relations
-$liker = $like->liker;          // Auteur (User, Admin, etc.)
-$likeable = $like->likeable;    // Objet liké (Post, Article, etc.)
-```
-
----
-
-## 📝 Structure de la base de données
-
-```sql
-CREATE TABLE likes (
-    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    liker_type VARCHAR(255) NOT NULL,    -- Type de l'auteur
-    liker_id BIGINT UNSIGNED NOT NULL,   -- ID de l'auteur
-    likeable_type VARCHAR(255) NOT NULL, -- Type de l'objet liké
-    likeable_id BIGINT UNSIGNED NOT NULL,-- ID de l'objet liké
-    type VARCHAR(20) DEFAULT 'like',     -- like, love, haha, wow, sad, angry
-    metadata JSON NULL,                  -- Métadonnées
-    created_at TIMESTAMP NULL,
-    updated_at TIMESTAMP NULL,
-    deleted_at TIMESTAMP NULL,
-    
-    UNIQUE INDEX idx_unique_like (liker_type, liker_id, likeable_type, likeable_id),
-    INDEX idx_liker (liker_type, liker_id),
-    INDEX idx_likeable (likeable_type, likeable_id),
-    INDEX idx_type (type),
-    INDEX idx_updated_at (updated_at)
+// Upload simple
+$image = $imageService->upload(
+    $request->file('avatar'),
+    $user,                    // Modèle parent
+    auth()->user(),          // Uploadé par
+    ImageType::AVATAR,
+    new ImageOptionsRecord(
+        alt_text: 'Photo de profil',
+        is_primary: true,
+        generate_thumbnails: true,
+    )
 );
 ```
 
----
-
-## 🔍 Exemple complet
+### 4.2 Upload multiple
 
 ```php
-use AndyDefer\LaravelImages\Services\LikeService;
-use AndyDefer\LaravelImages\Enums\LikeType;
+$images = $imageService->uploadMultiple(
+    $request->file('photos'),
+    $post,
+    auth()->user(),
+    ImageType::GALLERY,
+    new ImageOptionsRecord(
+        generate_thumbnails: true,
+    )
+);
 
-class PostController extends Controller
+foreach ($images as $image) {
+    echo $image->filename . "\n";
+}
+```
+
+### 4.3 Récupération des images
+
+```php
+// Toutes les images d'un modèle
+$images = $imageService->getImagesForModel($post);
+
+// Images d'un type spécifique
+$avatars = $imageService->getImagesForModel($user, ImageType::AVATAR);
+
+// Image principale
+$primary = $imageService->getPrimaryImage($user);
+
+// Une image par ID
+$image = $imageService->findImage(42);
+
+// Images mises à jour récemment
+$recent = $imageService->getImagesUpdatedAfter(
+    DateTimeVO::from(now()->subDays(7))
+);
+```
+
+### 4.4 Mise à jour
+
+```php
+use AndyDefer\LaravelImages\Records\ImageRecord;
+
+// Mettre à jour les métadonnées
+$image = $imageService->update(
+    ImageRecord::from(['metadata' => new ImageMetadataVO([
+        'alt_text' => 'Nouveau texte alternatif',
+        'caption' => 'Nouvelle légende',
+    ])]),
+    $imageId
+);
+
+// Définir comme image principale
+$imageService->setAsPrimary($imageId, $post);
+
+// Réorganiser les images
+$imageService->reorder([3, 1, 4, 2]);
+```
+
+### 4.5 Suppression
+
+```php
+// Supprimer une image
+$imageService->delete($imageId, deleteFile: true);
+
+// Supprimer plusieurs images
+$imageService->deleteMultiple([1, 2, 3], deleteFile: true);
+
+// Supprimer toutes les images d'un modèle
+$imageService->deleteAllForModel($post, deleteFile: true);
+```
+
+### 4.6 Miniatures
+
+```php
+// Récupérer l'URL d'une miniature
+$small = $imageService->getThumbnailUrl($imageId, 'small');
+$medium = $imageService->getThumbnailUrl($imageId, 'medium');
+$large = $imageService->getThumbnailUrl($imageId, 'large');
+
+// Dans un template Blade
+<img src="{{ $imageService->getThumbnailUrl($image->id, 'small') }}" />
+```
+
+---
+
+## 5. Gestion des albums
+
+### 5.1 Création d'un album
+
+```php
+use AndyDefer\LaravelImages\Services\AlbumService;
+use AndyDefer\LaravelCluster\Enums\BinaryChoice;
+use AndyDefer\LaravelImages\Records\AlbumOptionsRecord;
+
+$albumService = app(AlbumService::class);
+
+$album = $albumService->createAlbum(
+    $user,
+    'Mes photos de vacances',
+    new AlbumOptionsRecord(
+        description: 'Photos de mon voyage en Italie',
+        is_public: BinaryChoice::YES,
+        is_featured: BinaryChoice::NO,
+    )
+);
+```
+
+### 5.2 Gestion des images d'un album
+
+```php
+// Ajouter des images à un album
+$albumService->addImagesToAlbum($album, [1, 2, 3, 4, 5]);
+
+// Ajouter une image avec une position spécifique
+$albumService->addImageToAlbum($album, $imageId, $order = 3);
+
+// Réorganiser les images
+$albumService->reorderAlbumImages($album, [3, 1, 4, 2, 5]);
+
+// Retirer une image
+$albumService->removeImageFromAlbum($album, $imageId);
+
+// Vider l'album
+$albumService->removeAllImagesFromAlbum($album);
+```
+
+### 5.3 Récupération des albums
+
+```php
+// Albums d'un modèle (publics uniquement)
+$albums = $albumService->getAlbumsForModel($user, onlyPublic: true);
+
+// Tous les albums (publics et privés)
+$allAlbums = $albumService->getAlbumsForModel($user, onlyPublic: false);
+
+// Album par slug
+$album = $albumService->getAlbumBySlug('mes-photos-de-vacances');
+
+// Albums mis en avant
+$featured = $albumService->getFeaturedAlbums(10);
+```
+
+### 5.4 Gestion de la couverture
+
+```php
+// Définir la couverture
+$albumService->setCoverImage($album, $imageId);
+
+// Récupérer la couverture
+$cover = $albumService->getAlbumCoverImage($album);
+```
+
+### 5.5 Mise à jour et suppression
+
+```php
+// Mettre à jour un album
+$album = $albumService->updateAlbum(
+    $albumId,
+    new AlbumOptionsRecord(
+        name: 'Nouveau nom',
+        description: 'Nouvelle description',
+        is_public: BinaryChoice::NO,
+        is_featured: BinaryChoice::YES,
+    )
+);
+
+// Dupliquer un album
+$duplicate = $albumService->duplicateAlbum($album, 'Copie - Mes photos');
+
+// Supprimer un album
+$albumService->deleteAlbum($albumId, deleteImages: true);
+```
+
+---
+
+## 6. Processeurs d'images
+
+### 6.1 GD vs Imagick
+
+| Feature | GD | Imagick |
+|---------|----|---------|
+| Disponibilité | ✅ Par défaut | ⚠️ Installation requise |
+| Performance | Bonne | Excellente |
+| Qualité | Bonne | Supérieure |
+| Formats supportés | JPG, PNG, GIF, WebP | JPG, PNG, GIF, WebP, HEIC, AVIF, TIFF |
+| Utilisation | `new GdImageProcessor()` | `new ImagickImageProcessor()` |
+
+### 6.2 Utilisation du processeur
+
+```php
+use AndyDefer\LaravelImages\Processors\GdImageProcessor;
+
+$processor = new GdImageProcessor($storage, $fileSystem);
+
+// Redimensionner une image
+$resized = $processor->resize(
+    $imagePath,  // ImagePathVO
+    800,         // Largeur
+    600,         // Hauteur (null = ratio conservé)
+    85           // Qualité (1-100)
+);
+
+echo $resized->getFullPath();
+```
+
+### 6.3 Redimensionnement avancé
+
+```php
+// Redimensionner avec ratio conservé
+$resized = $processor->resize($imagePath, 800);
+
+// Redimensionner avec dimensions exactes
+$resized = $processor->resize($imagePath, 400, 300, 90);
+
+// Générer plusieurs tailles
+$sizes = [
+    ['width' => 1920, 'height' => 1080, 'quality' => 90],
+    ['width' => 800, 'height' => 600, 'quality' => 85],
+    ['width' => 150, 'height' => 150, 'quality' => 75],
+];
+
+foreach ($sizes as $config) {
+    $processor->resize($imagePath, $config['width'], $config['height'], $config['quality']);
+}
+```
+
+---
+
+## 7. Stockage
+
+### 7.1 Configuration du stockage
+
+```php
+use AndyDefer\LaravelImages\Storage\LocalImageStorage;
+use AndyDefer\PhpServices\Services\FileSystemService;
+
+// Création du stockage
+$fileSystem = new FileSystemService();
+$storage = new LocalImageStorage($fileSystem, 'public');
+```
+
+### 7.2 Opérations de stockage
+
+```php
+// Stocker un fichier
+$path = $storage->store($uploadedFile, 'users/123/avatars', 'profile.jpg');
+
+// Vérifier l'existence
+if ($storage->exists($path)) {
+    // Le fichier existe
+}
+
+// Obtenir le chemin complet
+$fullPath = $storage->getFullPath($path);
+
+// Lister les fichiers d'un dossier
+$files = $storage->files('users/123/avatars');
+
+// Supprimer un fichier
+$storage->delete($path);
+
+// Supprimer plusieurs fichiers
+$storage->deleteMultiple($files);
+
+// Changer le chemin de base
+$storage->setBasePath('private');
+```
+
+---
+
+## 8. Exemples complets
+
+### 8.1 Upload d'avatar avec options
+
+```php
+<?php
+
+namespace App\Http\Controllers;
+
+use AndyDefer\LaravelImages\Services\ImageService;
+use AndyDefer\LaravelImages\Enums\ImageType;
+use AndyDefer\LaravelImages\Records\ImageOptionsRecord;
+use Illuminate\Http\Request;
+
+class AvatarController extends Controller
 {
     public function __construct(
-        private readonly LikeService $likeService
+        private readonly ImageService $imageService,
     ) {}
 
-    public function react(Request $request, Post $post)
+    public function upload(Request $request)
     {
-        $user = $request->user();
-        $type = LikeType::tryFrom($request->input('type', 'like'));
+        $request->validate([
+            'avatar' => 'required|image|max:2048',
+        ]);
 
-        if (!$type) {
-            return response()->json(['error' => 'Type de réaction invalide'], 400);
-        }
-
-        $reacted = $this->likeService->toggle($user, $post, $type);
+        $image = $this->imageService->upload(
+            $request->file('avatar'),
+            $request->user(),
+            $request->user(),
+            ImageType::AVATAR,
+            new ImageOptionsRecord(
+                alt_text: 'Avatar de ' . $request->user()->name,
+                is_primary: true,
+                generate_thumbnails: true,
+                order: 1,
+            )
+        );
 
         return response()->json([
-            'reacted' => $reacted,
-            'type' => $reacted ? $type->value : null,
-            'emoji' => $reacted ? $type->getEmoji() : null,
-            'label' => $reacted ? $type->getLabel() : null,
+            'message' => 'Avatar uploadé avec succès',
+            'image' => [
+                'id' => $image->id,
+                'url' => $image->full_url,
+                'thumbnail' => $this->imageService->getThumbnailUrl($image->id, 'small'),
+            ],
         ]);
     }
+}
+```
 
-    public function stats(Post $post)
+### 8.2 Galerie d'images
+
+```php
+<?php
+
+namespace App\Http\Controllers;
+
+use AndyDefer\LaravelImages\Services\ImageService;
+use AndyDefer\LaravelImages\Services\AlbumService;
+use AndyDefer\LaravelCluster\Enums\BinaryChoice;
+use AndyDefer\LaravelImages\Records\AlbumOptionsRecord;
+use Illuminate\Http\Request;
+
+class GalleryController extends Controller
+{
+    public function __construct(
+        private readonly ImageService $imageService,
+        private readonly AlbumService $albumService,
+    ) {}
+
+    public function createAlbum(Request $request)
     {
-        $types = LikeType::cases();
-        $reactions = [];
+        $album = $this->albumService->createAlbum(
+            $request->user(),
+            $request->input('name'),
+            new AlbumOptionsRecord(
+                description: $request->input('description'),
+                is_public: BinaryChoice::YES,
+            )
+        );
 
-        foreach ($types as $type) {
-            $reactions[$type->value] = [
-                'count' => $this->likeService->countLikesByType($post, $type),
-                'emoji' => $type->getEmoji(),
-                'label' => $type->getLabel(),
+        // Upload des images
+        $images = $this->imageService->uploadMultiple(
+            $request->file('photos'),
+            $request->user(),
+            $request->user(),
+            ImageType::GALLERY,
+            new ImageOptionsRecord(generate_thumbnails: true)
+        );
+
+        // Ajout à l'album
+        $imageIds = $images->pluck('id')->toArray();
+        $this->albumService->addImagesToAlbum($album, $imageIds);
+
+        // Définir la couverture
+        if (!empty($imageIds)) {
+            $this->albumService->setCoverImage($album, $imageIds[0]);
+        }
+
+        return response()->json([
+            'message' => 'Album créé avec succès',
+            'album' => $album,
+            'images' => $images,
+        ]);
+    }
+}
+```
+
+### 8.3 Export d'images avec filtrage
+
+```php
+<?php
+
+namespace App\Services;
+
+use AndyDefer\LaravelImages\Services\ImageService;
+use Illuminate\Support\Collection;
+
+class ImageExportService
+{
+    public function __construct(
+        private readonly ImageService $imageService,
+    ) {}
+
+    public function export(Model $model, array $types = null): array
+    {
+        $images = $this->imageService->getImagesForModel($model);
+
+        if ($types) {
+            $images = $images->filter(fn($img) => in_array($img->type, $types));
+        }
+
+        return $images->map(function ($image) {
+            return [
+                'id' => $image->id,
+                'filename' => $image->filename,
+                'original_filename' => $image->original_filename,
+                'url' => $image->full_url,
+                'thumbnails' => [
+                    'small' => $this->imageService->getThumbnailUrl($image->id, 'small'),
+                    'medium' => $this->imageService->getThumbnailUrl($image->id, 'medium'),
+                    'large' => $this->imageService->getThumbnailUrl($image->id, 'large'),
+                ],
+                'metadata' => $image->metadata?->toArray(),
+                'type' => $image->type->value,
+                'order' => $image->order,
+                'is_primary' => $image->is_primary,
             ];
-        }
-
-        return response()->json([
-            'total' => $this->likeService->countLikes($post),
-            'reactions' => $reactions,
-        ]);
-    }
-
-    public function likers(Post $post)
-    {
-        $likers = $this->likeService->getLikers($post);
-
-        return response()->json($likers);
-    }
-
-    public function myReactions(Request $request)
-    {
-        $user = $request->user();
-        $type = LikeType::tryFrom($request->input('type'));
-
-        if ($type) {
-            $reactions = $this->likeService->getLikerLikesByType($user, $type);
-        } else {
-            $reactions = $this->likeService->getLikerLikes($user);
-        }
-
-        return response()->json($reactions);
+        })->toArray();
     }
 }
 ```
 
 ---
 
-## 🧪 Tests
+## 9. API Référence
 
-### Exécuter les tests
+### ImageService
 
-```bash
-composer test
-```
+| Méthode | Description |
+|---------|-------------|
+| `findImage(int $id): ?Image` | Trouve une image par ID |
+| `upload(...): Image` | Upload une image |
+| `uploadMultiple(...): Collection` | Upload plusieurs images |
+| `update(ImageRecord $record, int $id): Image` | Met à jour une image |
+| `delete(int $id, bool $deleteFile): void` | Supprime une image |
+| `deleteMultiple(array $ids, bool $deleteFile): void` | Supprime plusieurs images |
+| `deleteAllForModel(Model $model, bool $deleteFile): void` | Supprime toutes les images d'un modèle |
+| `getImagesForModel(Model $model, ?ImageType $type): Collection` | Récupère les images d'un modèle |
+| `getPrimaryImage(Model $model): ?Image` | Récupère l'image principale |
+| `setAsPrimary(int $id, Model $model): void` | Définit une image comme principale |
+| `countImages(Model $model, ?ImageType $type): int` | Compte les images |
+| `getImagesUpdatedAfter(DateTimeVO $date): Collection` | Images mises à jour après une date |
+| `reorder(array $ids): void` | Réorganise les images |
+| `getThumbnailUrl(int $imageId, string $size): string` | URL de la miniature |
+| `getImageProcessor(): ImageProcessorInterface` | Retourne le processeur |
+| `getStorage(): ImageStorageInterface` | Retourne le stockage |
 
-### Exécuter uniquement les tests unitaires
+### AlbumService
 
-```bash
-composer test-unit
-```
+| Méthode | Description |
+|---------|-------------|
+| `createAlbum(...): Album` | Crée un album |
+| `addImagesToAlbum(Album $album, array $imageIds): void` | Ajoute des images |
+| `addImageToAlbum(Album $album, int $imageId, int $order): void` | Ajoute une image |
+| `removeImageFromAlbum(Album $album, int $imageId): void` | Retire une image |
+| `removeAllImagesFromAlbum(Album $album): void` | Vide un album |
+| `setCoverImage(Album $album, int $imageId): void` | Définit la couverture |
+| `getAlbumImages(Album $album): Collection` | Images d'un album |
+| `getAlbumsForModel(Model $model, bool $onlyPublic): Collection` | Albums d'un modèle |
+| `getAlbumBySlug(string|SlugVO $slug): ?Album` | Album par slug |
+| `updateAlbum(int $id, AlbumOptionsRecord $options): Album` | Met à jour un album |
+| `deleteAlbum(int $id, bool $deleteImages): void` | Supprime un album |
+| `reorderAlbumImages(Album $album, array $imageIds): void` | Réorganise les images |
+| `duplicateAlbum(Album $album, string $newName): Album` | Duplique un album |
+| `countAlbumImages(Album $album): int` | Compte les images |
+| `isAlbumEmpty(Album $album): bool` | Vérifie si l'album est vide |
+| `getAlbumCoverImage(Album $album): ?Image` | Image de couverture |
+| `getFeaturedAlbums(int $limit): Collection` | Albums mis en avant |
 
-### Exécuter uniquement les tests d'intégration
+### ImageType
 
-```bash
-composer test-integration
-```
+| Type | Description |
+|------|-------------|
+| `AVATAR` | Photo de profil |
+| `COVER` | Photo de couverture |
+| `GALLERY` | Galerie d'images |
+| `THUMBNAIL` | Miniature |
+| `ATTACHMENT` | Pièce jointe |
+| `LOGO` | Logo |
+| `ICON` | Icône |
+| `BANNER` | Bannière |
+| `PRODUCT` | Image de produit |
 
-### Configuration des tests
+### BinaryChoice
 
-Le package utilise `orchestra/testbench` pour les tests d'intégration avec une base de données SQLite en mémoire.
-
----
-
-## 🔧 Développement
-
-### Style de code
-
-```bash
-./vendor/bin/pint
-```
-
-### Analyse statique
-
-```bash
-./vendor/bin/phpstan analyse
-./vendor/bin/psalm
-```
-
----
-
-## 📄 Journal des modifications
-
-Veuillez consulter le [CHANGELOG](CHANGELOG.md) pour plus d'informations sur les modifications récentes.
-
----
-
-## 🤝 Contribuer
-
-Veuillez consulter [CONTRIBUTING](CONTRIBUTING.md) pour plus de détails.
-
-### Flux de développement
-
-1. Forkez le dépôt
-2. Créez une branche de fonctionnalité (`git checkout -b feature/amazing-feature`)
-3. Apportez vos modifications
-4. Exécutez les tests (`composer test`)
-5. Committez vos modifications (`git commit -m 'Ajouter une fonctionnalité géniale'`)
-6. Poussez vers la branche (`git push origin feature/amazing-feature`)
-7. Ouvrez une Pull Request
-
----
-
-## 📦 Dépendances
-
-- [`andydefer/php-vo`](https://github.com/andydefer/php-vo) - Value Objects
-- [`andydefer/laravel-repository`](https://github.com/andydefer/laravel-repository) - Implémentation du pattern Repository
-- [`andydefer/domain-structures`](https://github.com/andydefer/domain-structures) - Structures de domaine (AbstractRecord, AbstractData)
+| Valeur | Description |
+|--------|-------------|
+| `YES` | Oui |
+| `NO` | Non |
 
 ---
 
-## 👨‍💻 Auteur
+## Licence
 
-**Andy Kani**
-- GitHub: [@andydefer](https://github.com/andydefer)
-- Email: andykanidimbu@gmail.com
-
----
-
-
-
-## ⭐ Support
-
-Si vous trouvez ce package utile, n'hésitez pas à lui donner une ⭐ sur GitHub !
-
----
-
-## 🙏 Remerciements
-
-- Framework Laravel
-- Tous les contributeurs et utilisateurs de ce package
-
----
-
-**Construit avec ❤️ pour la communauté Laravel**
+MIT © [Andy Defer](https://github.com/andydefer)
