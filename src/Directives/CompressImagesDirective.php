@@ -10,22 +10,22 @@ use AndyDefer\DomainStructures\Collections\Utility\StringTypedCollection;
 use AndyDefer\LaravelImages\Contracts\Storage\ImageStorageInterface;
 use AndyDefer\PhpServices\Contracts\FileSystemInterface;
 use Illuminate\Support\Collection;
-use Override;
 use RuntimeException;
 use Symfony\Component\Process\Process;
 
 /**
  * CLI directive for compressing PNG, JPG, and JPEG images.
  *
- * Uses system tools pngquant and jpegoptim to reduce image file sizes.
- * Supports recursive processing, dry-run simulation, metadata stripping,
- * and configurable quality settings.
+ * This directive uses system tools (pngquant and jpegoptim) to reduce
+ * image file sizes while maintaining visual quality. It supports recursive
+ * directory processing, dry-run mode, metadata stripping, and configurable
+ * quality settings.
  *
  * @example
  * // Basic compression
  * ./bin/app images:compress images
  *
- * // Compression with custom settings
+ * // Custom quality settings
  * ./bin/app images:compress images --recursive --strip-meta --png-quality=30-40 --jpg-quality=40
  *
  * // Skip already compressed images
@@ -34,11 +34,8 @@ use Symfony\Component\Process\Process;
  * // Skip images smaller than 50KB
  * ./bin/app images:compress images max-size=50
  *
- * // Dry-run simulation
+ * // Simulate without modifying files
  * ./bin/app images:compress images --dry-run
- *
- * // Using alias
- * ./bin/app imc images
  */
 final class CompressImagesDirective extends AbstractDirective
 {
@@ -48,7 +45,11 @@ final class CompressImagesDirective extends AbstractDirective
 
     private const FILE_SIZE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB'];
 
-    private const MIN_SIZE_THRESHOLD_BYTES = 10240; // 10KB
+    private const MIN_SIZE_THRESHOLD_BYTES = 10240;
+
+    private const PNG_METADATA_RATIO_COMPRESSED = 0.10;
+
+    private const PNG_METADATA_RATIO_UNCOMPRESSED = 0.30;
 
     private FileSystemInterface $fileSystem;
 
@@ -72,7 +73,6 @@ final class CompressImagesDirective extends AbstractDirective
                 {--skip-compressed}#"Skip already compressed images"';
     }
 
-    #[Override]
     public function getAliases(): StringTypedCollection
     {
         return StringTypedCollection::from(['imc']);
@@ -105,7 +105,6 @@ final class CompressImagesDirective extends AbstractDirective
     protected function execute(): ExitCode
     {
         $config = $this->buildCompressionConfig();
-
         $this->initializeContext($config);
 
         $files = $this->findImages($config['source'], $config['recursive']);
@@ -126,25 +125,7 @@ final class CompressImagesDirective extends AbstractDirective
         }
 
         $this->ensureDestinationExists($config['destination']);
-
-        $processedCount = 0;
-        $skippedCount = 0;
-
-        foreach ($files as $file) {
-            if ($this->shouldSkipImage($file, $config)) {
-                $skippedCount++;
-
-                continue;
-            }
-
-            $this->compressSingleImage($file, $config);
-            $processedCount++;
-        }
-
-        if ($skippedCount > 0) {
-            $this->newLine();
-            $this->info("⏭️  Skipped {$skippedCount} already compressed images");
-        }
+        $this->processImages($files, $config);
 
         $this->displaySummary();
 
@@ -170,13 +151,7 @@ final class CompressImagesDirective extends AbstractDirective
     private function ensureDependenciesAreInstalled(): void
     {
         $requiredTools = ['pngquant', 'jpegoptim'];
-        $missing = [];
-
-        foreach ($requiredTools as $tool) {
-            if (! $this->isToolInstalled($tool)) {
-                $missing[] = $tool;
-            }
-        }
+        $missing = array_filter($requiredTools, fn (string $tool): bool => ! $this->isToolInstalled($tool));
 
         if ($missing === []) {
             return;
@@ -253,7 +228,7 @@ final class CompressImagesDirective extends AbstractDirective
             'destination' => $this->getArgument('destination') ?? $this->getArgument('source'),
             'pngQuality' => $this->getArgument('png-quality') ?? self::PNG_QUALITY_DEFAULT,
             'jpgQuality' => (int) ($this->getArgument('jpg-quality') ?? self::JPG_QUALITY_DEFAULT),
-            'maxSize' => $maxSizeKB * 1024, // Convert KB to bytes
+            'maxSize' => $maxSizeKB * 1024,
             'stripMeta' => $this->getFlag('strip-meta'),
             'recursive' => $this->getFlag('recursive'),
             'dryRun' => $this->getFlag('dry-run'),
@@ -277,14 +252,11 @@ final class CompressImagesDirective extends AbstractDirective
     {
         $basePath = $this->resolveBasePath($source);
 
-        if ($recursive) {
-            $files = $this->findImagesRecursively($basePath);
-        } else {
-            $pattern = $basePath.'/*.{jpg,jpeg,png}';
-            $files = glob($pattern, GLOB_BRACE) ?: [];
-        }
+        $files = $recursive
+            ? $this->findImagesRecursively($basePath)
+            : $this->findImagesInDirectory($basePath);
 
-        return collect($files)->filter(fn ($path): bool => is_file($path));
+        return collect($files)->filter(fn (string $path): bool => is_file($path));
     }
 
     private function resolveBasePath(string $source): string
@@ -305,6 +277,16 @@ final class CompressImagesDirective extends AbstractDirective
     /**
      * @return array<int, string>
      */
+    private function findImagesInDirectory(string $directory): array
+    {
+        $pattern = $directory.'/*.{jpg,jpeg,png}';
+
+        return glob($pattern, GLOB_BRACE) ?: [];
+    }
+
+    /**
+     * @return array<int, string>
+     */
     private function findImagesRecursively(string $directory): array
     {
         $files = [];
@@ -318,7 +300,7 @@ final class CompressImagesDirective extends AbstractDirective
             }
 
             $extension = strtolower($file->getExtension());
-            if (in_array($extension, ['jpg', 'jpeg', 'png'])) {
+            if (in_array($extension, ['jpg', 'jpeg', 'png'], true)) {
                 $files[] = $file->getPathname();
             }
         }
@@ -352,84 +334,123 @@ final class CompressImagesDirective extends AbstractDirective
         $this->line('📊 Total: '.$files->count().' files, '.$this->formatSize($totalSize));
     }
 
+    private function processImages(Collection $files, array $config): void
+    {
+        $processedCount = 0;
+        $skippedCount = 0;
+
+        foreach ($files as $file) {
+            if ($this->shouldSkipImage($file, $config)) {
+                $skippedCount++;
+
+                continue;
+            }
+
+            $this->compressSingleImage($file, $config);
+            $processedCount++;
+        }
+
+        if ($skippedCount > 0) {
+            $this->newLine();
+            $this->info("⏭️  Skipped {$skippedCount} already compressed images");
+        }
+    }
+
     private function shouldSkipImage(string $file, array $config): bool
     {
         $fileSize = $this->fileSystem->size($file);
 
-        // Skip by max size threshold
-        if ($config['maxSize'] > 0 && $fileSize < $config['maxSize']) {
-            $relative = $this->getRelativePath($file);
-            $this->line("   ⏭️  {$relative} - skipped (size < ".$this->formatSize($config['maxSize']).')');
-
+        if ($this->isBelowMinSize($file, $fileSize, $config)) {
             return true;
         }
 
-        // Skip already compressed images
-        if ($config['skipCompressed'] && $this->isImageAlreadyCompressed($file)) {
-            $relative = $this->getRelativePath($file);
-            $this->line("   ⏭️  {$relative} - already compressed, skipping");
-
+        if ($this->isAlreadyCompressed($file, $config)) {
             return true;
         }
 
         return false;
+    }
+
+    private function isBelowMinSize(string $file, int $fileSize, array $config): bool
+    {
+        if ($config['maxSize'] <= 0 || $fileSize >= $config['maxSize']) {
+            return false;
+        }
+
+        $relative = $this->getRelativePath($file);
+        $this->line(
+            "   ⏭️  {$relative} - skipped (size < ".$this->formatSize($config['maxSize']).')'
+        );
+
+        return true;
+    }
+
+    private function isAlreadyCompressed(string $file, array $config): bool
+    {
+        if (! $config['skipCompressed']) {
+            return false;
+        }
+
+        if (! $this->isImageAlreadyCompressed($file)) {
+            return false;
+        }
+
+        $relative = $this->getRelativePath($file);
+        $this->line("   ⏭️  {$relative} - already compressed, skipping");
+
+        return true;
     }
 
     private function isImageAlreadyCompressed(string $filePath): bool
     {
         $fileSize = $this->fileSystem->size($filePath);
 
-        // Si l'image est déjà très petite (< 10KB), considérer comme compressée
         if ($fileSize < self::MIN_SIZE_THRESHOLD_BYTES) {
             return true;
         }
 
         $extension = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
 
-        // Pour les PNG, vérifier si c'est déjà optimisé
-        if ($extension === 'png') {
-            // Vérifier la présence de métadonnées
-            $content = $this->fileSystem->get($filePath);
-            // Les PNG optimisés ont généralement moins de 50% de métadonnées
-            $metadataRatio = $this->estimatePngMetadataRatio($content);
-            if ($metadataRatio < 0.10) {
-                return true;
-            }
-        }
+        return match ($extension) {
+            'png' => $this->isPngAlreadyCompressed($filePath),
+            'jpg', 'jpeg' => $this->isJpegAlreadyCompressed($filePath),
+            default => false,
+        };
+    }
 
-        // Pour les JPEG, vérifier si c'est déjà optimisé
-        if (in_array($extension, ['jpg', 'jpeg'])) {
-            // Vérifier la présence de métadonnées Exif
-            $content = $this->fileSystem->get($filePath);
-            if (str_contains($content, 'Exif') === false) {
-                return true;
-            }
-        }
+    private function isPngAlreadyCompressed(string $filePath): bool
+    {
+        $content = $this->fileSystem->get($filePath);
+        $metadataRatio = $this->estimatePngMetadataRatio($content);
 
-        return false;
+        return $metadataRatio < self::PNG_METADATA_RATIO_COMPRESSED;
+    }
+
+    private function isJpegAlreadyCompressed(string $filePath): bool
+    {
+        $content = $this->fileSystem->get($filePath);
+
+        return ! str_contains($content, 'Exif');
     }
 
     private function estimatePngMetadataRatio(string $content): float
     {
-        // Estimation basique : vérifier la présence de chunks IHDR, PLTE, IDAT, IEND
-        $hasMetadata = str_contains($content, 'IHDR') &&
-                       str_contains($content, 'PLTE') &&
-                       str_contains($content, 'IDAT') &&
-                       str_contains($content, 'IEND');
+        $hasAllChunks = str_contains($content, 'IHDR')
+            && str_contains($content, 'PLTE')
+            && str_contains($content, 'IDAT')
+            && str_contains($content, 'IEND');
 
-        // Si tous les chunks standards sont présents, l'image est probablement compressée
-        return $hasMetadata ? 0.05 : 0.30;
+        return $hasAllChunks
+            ? self::PNG_METADATA_RATIO_COMPRESSED
+            : self::PNG_METADATA_RATIO_UNCOMPRESSED;
     }
 
     /**
      * @param array{
-     *     source: string,
      *     destination: string,
      *     pngQuality: string,
      *     jpgQuality: int,
      *     stripMeta: bool,
-     *     recursive: bool,
-     *     dryRun: bool,
      *     force: bool
      * } $config
      */
@@ -439,8 +460,6 @@ final class CompressImagesDirective extends AbstractDirective
         $filename = basename($file);
         $relativePath = $this->getRelativePath($file);
         $destinationPath = $this->storage->getFullPath($config['destination'].'/'.$filename);
-
-        $sizeBefore = $this->fileSystem->size($file);
 
         match ($extension) {
             'png' => $this->compressPng($file, $destinationPath, $config['pngQuality'], $config['force']),
@@ -550,17 +569,14 @@ final class CompressImagesDirective extends AbstractDirective
 
     private function updateStats(string $file, string $destinationPath, string $relativePath): void
     {
-        $sizeBefore = $this->contextGet('total_size_before');
-        $sizeAfter = $this->contextGet('total_size_after');
-
         $fileSizeBefore = $this->fileSystem->size($file);
         $fileSizeAfter = $this->fileSystem->exists($destinationPath)
             ? $this->fileSystem->size($destinationPath)
             : $fileSizeBefore;
 
         $this->contextSet('processed_count', $this->contextGet('processed_count') + 1);
-        $this->contextSet('total_size_before', $sizeBefore + $fileSizeBefore);
-        $this->contextSet('total_size_after', $sizeAfter + $fileSizeAfter);
+        $this->contextSet('total_size_before', $this->contextGet('total_size_before') + $fileSizeBefore);
+        $this->contextSet('total_size_after', $this->contextGet('total_size_after') + $fileSizeAfter);
 
         $this->logCompressionResult($relativePath, $fileSizeBefore, $fileSizeAfter);
     }
@@ -579,8 +595,8 @@ final class CompressImagesDirective extends AbstractDirective
 
     private function displaySummary(): void
     {
-        $count = $this->contextGet('processed_count');
-        $skipped = $this->contextGet('skipped_count');
+        $processedCount = $this->contextGet('processed_count');
+        $skippedCount = $this->contextGet('skipped_count');
         $sizeBefore = $this->contextGet('total_size_before');
         $sizeAfter = $this->contextGet('total_size_after');
         $saved = $sizeBefore - $sizeAfter;
@@ -588,10 +604,12 @@ final class CompressImagesDirective extends AbstractDirective
 
         $this->newLine();
         $this->line('📊 Summary:');
-        $this->line("   📁 Files processed: {$count}");
-        if ($skipped > 0) {
-            $this->line("   ⏭️  Files skipped: {$skipped}");
+        $this->line("   📁 Files processed: {$processedCount}");
+
+        if ($skippedCount > 0) {
+            $this->line("   ⏭️  Files skipped: {$skippedCount}");
         }
+
         $this->line('   📦 Size before: '.$this->formatSize($sizeBefore));
         $this->line('   📦 Size after: '.$this->formatSize($sizeAfter));
         $this->line('   💾 Space saved: '.$this->formatSize($saved)." ({$savedPercent}%)");

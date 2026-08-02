@@ -7,12 +7,18 @@ namespace AndyDefer\LaravelImages\Models;
 use AndyDefer\LaravelCluster\Casts\ClusterCast;
 use AndyDefer\LaravelCluster\Enums\BinaryChoice;
 use AndyDefer\LaravelCluster\ValueObjects\ClusterVO;
+use AndyDefer\LaravelImages\Database\Factories\AlbumFactory;
 use AndyDefer\LaravelUtils\Proxies\AttributeProxy;
 use AndyDefer\PhpVo\ValueObjects\SlugVO;
 use Illuminate\Database\Eloquent\Casts\Attribute;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Carbon;
 
 /**
  * Album model for grouping images.
@@ -27,10 +33,21 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property ClusterVO|null $metadata
  * @property string|null $albumable_type
  * @property int|null $albumable_id
+ * @property Carbon|null $created_at
+ * @property Carbon|null $updated_at
+ * @property Carbon|null $deleted_at
+ *
+ * // Computed attributes
  * @property-read int $image_count
+ *
+ * // Relations
+ * @property-read Model|null $albumable
+ * @property-read Collection<int, Image> $images
+ * @property-read Image|null $coverImage
  */
 final class Album extends Model
 {
+    use HasFactory;
     use SoftDeletes;
 
     protected $table = 'albums';
@@ -56,15 +73,30 @@ final class Album extends Model
         'deleted_at' => 'datetime',
     ];
 
+    protected static function newFactory(): AlbumFactory
+    {
+        return AlbumFactory::new();
+    }
+
     // ============================================================
     // RELATIONS
     // ============================================================
 
+    /**
+     * Get the parent albumable model (polymorphic relation).
+     *
+     * @return MorphTo
+     */
     public function albumable()
     {
         return $this->morphTo();
     }
 
+    /**
+     * Get the images belonging to the album.
+     *
+     * @return BelongsToMany<Image>
+     */
     public function images(): BelongsToMany
     {
         return $this->belongsToMany(
@@ -75,7 +107,12 @@ final class Album extends Model
         )->withPivot('order', 'created_at')->orderBy('order');
     }
 
-    public function coverImage()
+    /**
+     * Get the cover image of the album.
+     *
+     * @return BelongsTo<Image, $this>
+     */
+    public function coverImage(): BelongsTo
     {
         return $this->belongsTo(Image::class, 'cover_image_id');
     }
@@ -84,6 +121,11 @@ final class Album extends Model
     // ATTRIBUTE ACCESSORS - Transformable avec AttributeProxy
     // ============================================================
 
+    /**
+     * Get the slug attribute as a SlugVO.
+     *
+     * @return Attribute<SlugVO, never>
+     */
     protected function slug(): Attribute
     {
         return AttributeProxy::nullable(SlugVO::class);
@@ -93,10 +135,22 @@ final class Album extends Model
     // ATTRIBUTE ACCESSORS - NON TRANSFORMABLE
     // ============================================================
 
+    /**
+     * Get the number of images in the album.
+     *
+     * @return Attribute<int, never>
+     */
     protected function imageCount(): Attribute
     {
         return Attribute::make(
             get: fn (): int => $this->images()->count(),
         );
+    }
+
+    protected static function booted(): void
+    {
+        self::deleting(function (Album $album) {
+            $album->images()->detach();
+        });
     }
 }

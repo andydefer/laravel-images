@@ -57,7 +57,7 @@ Desktop.ini
 # Logs
 *.log
 logs/
-
+images/
 # Testing
 /testbench
 /.testbench

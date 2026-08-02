@@ -4,7 +4,8 @@
     "license": "MIT",
     "autoload": {
         "psr-4": {
-            "AndyDefer\\LaravelImages\\": "src/"
+            "AndyDefer\\LaravelImages\\": "src/",
+            "AndyDefer\\LaravelImages\\Database\\Factories\\": "database/factories/"
         }
     },
     "autoload-dev": {

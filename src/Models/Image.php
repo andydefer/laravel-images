@@ -4,13 +4,17 @@ declare(strict_types=1);
 
 namespace AndyDefer\LaravelImages\Models;
 
+use AndyDefer\LaravelImages\Database\Factories\ImageFactory;
 use AndyDefer\LaravelImages\Enums\ImageType;
 use AndyDefer\LaravelImages\ValueObjects\ImageMetadataVO;
 use AndyDefer\LaravelImages\ValueObjects\ImagePathVO;
 use AndyDefer\LaravelUtils\Proxies\AttributeProxy;
 use Illuminate\Database\Eloquent\Casts\Attribute;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Carbon;
 
 /**
  * Image model representing uploaded images with polymorphic relations.
@@ -33,12 +37,21 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property bool $is_processed
  * @property string|null $uploaded_by_type
  * @property int|null $uploaded_by_id
+ * @property Carbon|null $created_at
+ * @property Carbon|null $updated_at
+ * @property Carbon|null $deleted_at
+ *
+ * // Computed attributes
  * @property-read string $full_url
  * @property-read string $file_size_for_humans
  * @property-read string $dimensions
+ *
+ * // Relations
+ * @property-read Model|null $imageable
  */
 final class Image extends Model
 {
+    use HasFactory;
     use SoftDeletes;
 
     protected $table = 'images';
@@ -77,11 +90,19 @@ final class Image extends Model
         'deleted_at' => 'datetime',
     ];
 
+    protected static function newFactory(): ImageFactory
+    {
+        return ImageFactory::new();
+    }
+
     // ============================================================
     // RELATIONS
     // ============================================================
 
-    public function imageable()
+    /**
+     * Get the parent imageable model (polymorphic relation).
+     */
+    public function imageable(): MorphTo
     {
         return $this->morphTo();
     }
@@ -90,6 +111,11 @@ final class Image extends Model
     // ATTRIBUTE ACCESSORS - Transformable avec AttributeProxy
     // ============================================================
 
+    /**
+     * Get the path attribute as an ImagePathVO.
+     *
+     * @return Attribute<ImagePathVO, never>
+     */
     protected function path(): Attribute
     {
         return AttributeProxy::make(
@@ -98,6 +124,11 @@ final class Image extends Model
         );
     }
 
+    /**
+     * Get the metadata attribute as an ImageMetadataVO.
+     *
+     * @return Attribute<ImageMetadataVO, never>
+     */
     protected function metadata(): Attribute
     {
         return AttributeProxy::nullable(ImageMetadataVO::class, 'metadata');
@@ -107,6 +138,11 @@ final class Image extends Model
     // ATTRIBUTE ACCESSORS - NON TRANSFORMABLE
     // ============================================================
 
+    /**
+     * Get the full URL of the image.
+     *
+     * @return Attribute<string, never>
+     */
     protected function fullUrl(): Attribute
     {
         return Attribute::make(
@@ -114,6 +150,11 @@ final class Image extends Model
         );
     }
 
+    /**
+     * Get the human-readable file size.
+     *
+     * @return Attribute<string, never>
+     */
     protected function fileSizeForHumans(): Attribute
     {
         return Attribute::make(
@@ -132,6 +173,11 @@ final class Image extends Model
         );
     }
 
+    /**
+     * Get the image dimensions (width x height).
+     *
+     * @return Attribute<string, never>
+     */
     protected function dimensions(): Attribute
     {
         return Attribute::make(

@@ -423,16 +423,14 @@ $storage->setBasePath('private');
 
 ## 8. Directives CLI
 
-Le package fournit une directive CLI pour compresser les images.
-
 ### 8.1 Installation de la CLI
 
-Créez votre propre point d'entrée CLI ou utilisez le binaire fourni.
+Le package fournit deux directives CLI pour la gestion des images :
 
-```bash
-# Créer un point d'entrée personnalisé
-./bin/images images:compress storage/app/public/images
-```
+| Directive | Alias | Description |
+|-----------|-------|-------------|
+| `images:compress` | `imc` | Compresse les images avec pngquant et jpegoptim |
+| `images:scan` | `ims` | Scanne un dossier et génère un inventaire JSON ou PHP |
 
 ### 8.2 Commande de compression
 
@@ -480,9 +478,90 @@ Créez votre propre point d'entrée CLI ou utilisez le binaire fourni.
 ./bin/images imc storage/app/public/images --recursive
 ```
 
-### 8.3 Prérequis système
+### 8.3 Commande de scan
 
-Les outils suivants doivent être installés sur le système :
+```bash
+./bin/images images:scan {source} {depth=0} {output=json} {extensions*} {excludes*} {--options}
+```
+
+**Paramètres :**
+
+| Paramètre | Description |
+|-----------|-------------|
+| `{source}` | Dossier source à scanner (relatif au disque de stockage) |
+| `{depth=0}` | Profondeur maximale de scan (0 = illimitée) |
+| `{::output->[json,array]=json}` | Format de sortie : `json` ou `array` (PHP) |
+| `{extensions*}` | Extensions d'images à inclure (ex: `png jpg webp` ou `[png,jpg]`) |
+| `{excludes*}` | Dossiers à exclure du scan |
+| `{--hash}` | Inclut le hash MD5 de chaque image |
+| `{--exclude-compressed}` | Exclut les images déjà compressées |
+
+**Exemples :**
+
+```bash
+# Scan simple avec sortie JSON
+./bin/images images:scan images
+
+# Scan avec profondeur limitée et sortie PHP array
+./bin/images images:scan images 2 array
+
+# Scan avec filtrage d'extensions et exclusion de dossiers
+./bin/images images:scan images 0 json [png,jpg] [compressed,thumbnails]
+
+# Scan avec génération de hash MD5
+./bin/images images:scan images --hash
+
+# Scan avec exclusion des images compressées
+./bin/images images:scan images --exclude-compressed
+
+# Utilisation de l'alias
+./bin/images ims images
+
+# Combinaison de toutes les options
+./bin/images images:scan images 2 json [png,jpg] [compressed,thumbnails] --hash --exclude-compressed
+```
+
+**Exemple de sortie JSON :**
+
+```json
+[
+  {
+    "path": "images/avatars/user1.png",
+    "filename": "user1.png",
+    "original_filename": "user1.png",
+    "extension": "png",
+    "mime_type": "image/png",
+    "size": 12345,
+    "width": 800,
+    "height": 600,
+    "hash": "5d41402abc4b2a76b9719d911017c592"
+  }
+]
+```
+
+**Exemple de sortie PHP (array) :**
+
+```php
+<?php
+
+return [
+    [
+        'path' => 'images/avatars/user1.png',
+        'filename' => 'user1.png',
+        'original_filename' => 'user1.png',
+        'extension' => 'png',
+        'mime_type' => 'image/png',
+        'size' => 12345,
+        'width' => 800,
+        'height' => 600,
+        'hash' => '5d41402abc4b2a76b9719d911017c592',
+    ],
+];
+```
+
+### 8.4 Prérequis système pour la compression
+
+Les outils suivants doivent être installés sur le système pour la compression :
 
 ```bash
 # Ubuntu/Debian
@@ -492,15 +571,17 @@ sudo apt install pngquant jpegoptim
 brew install pngquant jpegoptim
 ```
 
-### 8.4 Détection des images déjà compressées
+### 8.5 Détection des images déjà compressées
 
-La directive détecte automatiquement les images déjà compressées via :
+La directive de compression détecte automatiquement les images déjà compressées via :
 
 - **Taille** : Images < 10KB considérées comme compressées
 - **JPEG** : Absence de métadonnées Exif
 - **PNG** : Ratio de métadonnées faible (chunks standards)
 
-### 8.5 Exemple de sortie
+### 8.6 Exemple de sortie
+
+#### Compression
 
 ```bash
 $ ./bin/images images:compress images --skip-compressed
@@ -525,6 +606,23 @@ $ ./bin/images images:compress images --skip-compressed
    💾 Space saved: 9.57 MB (62.8%)
 
 ✅ Compression completed
+```
+
+#### Scan
+
+```bash
+$ ./bin/images images:scan images 2 json [png,jpg] [compressed,thumbnails] --hash
+
+🔍 Scanning images...
+
+✅ Source directory: images
+📁 Scanning: images
+
+📊 Found: 42 images
+
+💾 Output saved to: /storage/app/public/scan_result_2024-01-01_12-00-00.json
+
+✅ Scan completed
 ```
 
 ---
@@ -683,7 +781,26 @@ class ImageExportService
 }
 ```
 
-### 9.4 Compression via CLI
+### 9.4 Audit d'images avec scan CLI
+
+```bash
+# 1. Générer un inventaire complet des images
+./bin/images images:scan storage/app/public/images
+
+# 2. Générer un inventaire avec hash MD5
+./bin/images images:scan storage/app/public/images --hash
+
+# 3. Générer un inventaire PHP pour traitement programmatique
+./bin/images images:scan storage/app/public/images 0 array
+
+# 4. Analyser uniquement les JPEG/PNG en excluant les dossiers compressés
+./bin/images images:scan storage/app/public/images 0 json [png,jpg] [compressed,thumbnails] --hash
+
+# 5. Compresser les images après audit
+./bin/images images:compress storage/app/public/images --recursive --skip-compressed
+```
+
+### 9.5 Compression via CLI
 
 ```bash
 # Compression optimisée pour le web
@@ -768,4 +885,3 @@ class ImageExportService
 ## Licence
 
 MIT © [Andy Defer](https://github.com/andydefer)
----

@@ -12,8 +12,15 @@ return new class extends Migration
     {
         Schema::create('album_image', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('album_id')->constrained('albums')->onDelete('cascade');
-            $table->foreignId('image_id')->constrained('images')->onDelete('cascade');
+
+            $table->foreignId('album_id')
+                ->constrained('albums')
+                ->onDelete('cascade');
+
+            $table->foreignId('image_id')
+                ->constrained('images')
+                ->onDelete('cascade');
+
             $table->unsignedInteger('order')->default(0);
             $table->timestamps();
 
