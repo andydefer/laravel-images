@@ -1,4 +1,4 @@
-# LaravelImages - Documentation
+# Laravel Images - Documentation
 
 ## Table des matières
 
