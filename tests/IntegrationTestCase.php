@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace AndyDefer\LaravelImages\Tests;
 
+use AndyDefer\Directive\DirectiveServiceProvider;
 use AndyDefer\LaravelImages\ImageServiceProvider;
 use Orchestra\Testbench\TestCase as Orchestra;
 
@@ -24,6 +25,7 @@ abstract class IntegrationTestCase extends Orchestra
     protected function getPackageProviders($app): array
     {
         return [
+            DirectiveServiceProvider::class,
             ImageServiceProvider::class,
         ];
     }

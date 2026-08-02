@@ -1,4 +1,10 @@
-# Laravel Images - Documentation
+Tu as raison ! Ces traits `HasImages` et `HasAlbums` **n'existent pas** dans le package. C'est une erreur de ma part, j'ai inventé ces traits.
+
+Voici la correction :
+
+---
+
+# Laravel Images - Documentation (CORRIGÉE)
 
 ## Table des matières
 
@@ -9,8 +15,9 @@
 5. [Gestion des albums](#5-gestion-des-albums)
 6. [Processeurs d'images](#6-processeurs-dimages)
 7. [Stockage](#7-stockage)
-8. [Exemples complets](#8-exemples-complets)
-9. [API Référence](#9-api-référence)
+8. [Directives CLI](#8-directives-cli)
+9. [Exemples complets](#9-exemples-complets)
+10. [API Référence](#10-api-référence)
 
 ---
 
@@ -75,18 +82,18 @@ Une image est un modèle Eloquent qui représente un fichier image stocké sur l
 use AndyDefer\LaravelImages\Models\Image;
 
 // Propriétés principales
-$image->id;           // ID unique
-$image->path;         // Chemin relatif (ImagePathVO)
-$image->filename;     // Nom du fichier
+$image->id;                // ID unique
+$image->path;              // Chemin relatif (ImagePathVO)
+$image->filename;          // Nom du fichier
 $image->original_filename; // Nom original
-$image->extension;    // Extension (jpg, png, etc.)
-$image->mime_type;    // Type MIME
-$image->size;         // Taille en bytes
-$image->type;         // Type d'image (avatar, cover, gallery, etc.)
-$image->metadata;     // Métadonnées (ImageMetadataVO)
-$image->is_primary;   // Image principale
-$image->is_processed; // Traitée ou non
-$image->order;        // Ordre d'affichage
+$image->extension;         // Extension (jpg, png, etc.)
+$image->mime_type;         // Type MIME
+$image->size;              // Taille en bytes
+$image->type;              // Type d'image (avatar, cover, gallery, etc.)
+$image->metadata;          // Métadonnées (ImageMetadataVO)
+$image->is_primary;        // Image principale
+$image->is_processed;      // Traitée ou non
+$image->order;             // Ordre d'affichage
 ```
 
 ### 3.2 Album
@@ -107,16 +114,16 @@ $album->coverImage;    // Image de couverture
 
 ### 3.3 Relations polymorphiques
 
-Les images et albums peuvent être attachés à n'importe quel modèle Eloquent :
+Les images et albums utilisent des relations polymorphiques (`morphTo`, `morphToMany`) pour s'attacher à n'importe quel modèle Eloquent.
 
 ```php
-use AndyDefer\LaravelImages\Traits\HasImages;
-use AndyDefer\LaravelImages\Traits\HasAlbums;
+use AndyDefer\LaravelImages\Models\Image;
+use AndyDefer\LaravelImages\Models\Album;
 
 class User extends Model
 {
-    use HasImages;  // Ajoute des méthodes pour gérer les images
-    use HasAlbums;  // Ajoute des méthodes pour gérer les albums
+    // Une image s'attache à n'importe quel modèle via imageable()
+    // Un album s'attache à n'importe quel modèle via albumable()
 }
 ```
 
@@ -136,8 +143,8 @@ $imageService = app(ImageService::class);
 // Upload simple
 $image = $imageService->upload(
     $request->file('avatar'),
-    $user,                    // Modèle parent
-    auth()->user(),          // Uploadé par
+    $user,                    // Modèle parent (polymorphique)
+    auth()->user(),           // Uploadé par
     ImageType::AVATAR,
     new ImageOptionsRecord(
         alt_text: 'Photo de profil',
@@ -419,9 +426,74 @@ $storage->setBasePath('private');
 
 ---
 
-## 8. Exemples complets
+## 8. Directives CLI
 
-### 8.1 Upload d'avatar avec options
+Le package fournit une directive CLI pour compresser les images.
+
+### 8.1 Installation de la CLI
+
+Créez votre propre point d'entrée CLI ou utilisez le binaire fourni.
+
+```bash
+# Créer un point d'entrée personnalisé
+./bin/images images:compress storage/app/public/images
+```
+
+### 8.2 Commande de compression
+
+```bash
+./bin/images images:compress {source} {destination?} {--options}
+```
+
+**Paramètres :**
+
+| Paramètre | Description |
+|-----------|-------------|
+| `{source}` | Dossier source contenant les images à compresser |
+| `{destination?}` | Dossier de destination (source si omis) |
+| `{png-quality=45-50}` | Plage de qualité PNG (min-max, ex: 30-40) |
+| `{jpg-quality=50}` | Qualité JPEG (0-100) |
+| `{--strip-meta}` | Supprime les métadonnées (Exif, commentaires, etc.) |
+| `{--recursive}` | Traite les sous-dossiers récursivement |
+| `{--dry-run}` | Simule la compression sans modifier les fichiers |
+| `{--force}` | Force l'écrasement des fichiers existants |
+
+**Exemples :**
+
+```bash
+# Compression simple
+./bin/images images:compress storage/app/public/images
+
+# Compression avec destination personnalisée
+./bin/images images:compress storage/app/public/images storage/app/public/compressed
+
+# Compression récursive avec paramètres avancés
+./bin/images images:compress storage/app/public/images --recursive --strip-meta --png-quality=30-40 --jpg-quality=40
+
+# Simulation (dry-run)
+./bin/images images:compress storage/app/public/images --dry-run
+
+# Utilisation de l'alias
+./bin/images imc storage/app/public/images --recursive
+```
+
+### 8.3 Prérequis système
+
+Les outils suivants doivent être installés sur le système :
+
+```bash
+# Ubuntu/Debian
+sudo apt install pngquant jpegoptim
+
+# macOS
+brew install pngquant jpegoptim
+```
+
+---
+
+## 9. Exemples complets
+
+### 9.1 Upload d'avatar avec options
 
 ```php
 <?php
@@ -470,7 +542,7 @@ class AvatarController extends Controller
 }
 ```
 
-### 8.2 Galerie d'images
+### 9.2 Galerie d'images
 
 ```php
 <?php
@@ -528,7 +600,7 @@ class GalleryController extends Controller
 }
 ```
 
-### 8.3 Export d'images avec filtrage
+### 9.3 Export d'images avec filtrage
 
 ```php
 <?php
@@ -575,7 +647,7 @@ class ImageExportService
 
 ---
 
-## 9. API Référence
+## 10. API Référence
 
 ### ImageService
 

@@ -3,6 +3,8 @@
 composer.lock
 composer.phar
 
+/bin/
+
 # PHPUnit
 .phpunit.cache/
 /.phpunit.cache
