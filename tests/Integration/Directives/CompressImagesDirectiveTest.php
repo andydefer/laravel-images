@@ -467,6 +467,7 @@ final class CompressImagesDirectiveTest extends IntegrationTestCase
 
     public function test_compress_with_all_flags(): void
     {
+        // Arrange
         $this->createTestImage('image1.jpg', 800, 600, 'jpg');
         $this->createTestImage('image2.png', 800, 600, 'png');
         $this->createTestImage('small.jpg', 50, 50, 'jpg');
@@ -474,26 +475,45 @@ final class CompressImagesDirectiveTest extends IntegrationTestCase
         $source = 'images/test';
         $destination = 'images/compressed-all';
 
-        // ✅ Nettoyer le répertoire de destination s'il existe
+        // Nettoyer le répertoire de destination s'il existe
         $destPath = $this->storage->getFullPath($destination);
         if ($this->fileSystem->exists($destPath)) {
             $this->fileSystem->deleteDirectory($destPath);
         }
 
+        // Act
         $command = "images:compress {$source} {$destination} --recursive --strip-meta --force";
-
         $response = $this->service->run($command);
 
+        // Assert
         $this->assertSame(ExitCode::SUCCESS, $response->exit_code);
         $this->assertStringContainsString('📷 Starting image compression...', $response->output);
         $this->assertStringContainsString('📁 Created destination directory', $response->output);
         $this->assertStringContainsString('✅ Compression completed', $response->output);
 
-        $exists1 = $this->storage->exists('images/compressed-all/image1.jpg');
-        $exists2 = $this->storage->exists('images/compressed-all/image2.png');
+        // ✅ CORRECTION: La structure est conservée: destination/test/image1.jpg
+        // car getRelativePath() retourne "test/image1.jpg"
+        $expectedPath1 = 'images/compressed-all/test/image1.jpg';
+        $expectedPath2 = 'images/compressed-all/test/image2.png';
 
-        $this->assertTrue($exists1);
-        $this->assertTrue($exists2);
+        $exists1 = $this->storage->exists($expectedPath1);
+        $exists2 = $this->storage->exists($expectedPath2);
+
+        $this->assertTrue($exists1, 'Image1.jpg should exist in compressed directory: '.$expectedPath1);
+        $this->assertTrue($exists2, 'Image2.png should exist in compressed directory: '.$expectedPath2);
+
+        // Vérifier que les fichiers ont été compressés (taille réduite)
+        $originalPath1 = $this->storage->getFullPath('images/test/image1.jpg');
+        $compressedPath1 = $this->storage->getFullPath($expectedPath1);
+
+        $originalSize1 = $this->fileSystem->size($originalPath1);
+        $compressedSize1 = $this->fileSystem->size($compressedPath1);
+
+        $this->assertLessThan($originalSize1, $compressedSize1, 'Image1.jpg should be compressed');
+
+        // Vérifier les métadonnées (strip-meta)
+        $content = $this->fileSystem->get($compressedPath1);
+        $this->assertStringNotContainsString('Exif', $content, 'Metadata should be stripped from JPEG');
     }
 
     // ============================================================

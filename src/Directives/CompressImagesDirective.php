@@ -13,30 +13,6 @@ use Illuminate\Support\Collection;
 use RuntimeException;
 use Symfony\Component\Process\Process;
 
-/**
- * CLI directive for compressing PNG, JPG, and JPEG images.
- *
- * This directive uses system tools (pngquant and jpegoptim) to reduce
- * image file sizes while maintaining visual quality. It supports recursive
- * directory processing, dry-run mode, metadata stripping, and configurable
- * quality settings.
- *
- * @example
- * // Basic compression
- * ./bin/app images:compress images
- *
- * // Custom quality settings
- * ./bin/app images:compress images --recursive --strip-meta --png-quality=30-40 --jpg-quality=40
- *
- * // Skip already compressed images
- * ./bin/app images:compress images --skip-compressed
- *
- * // Skip images smaller than 50KB
- * ./bin/app images:compress images max-size=50
- *
- * // Simulate without modifying files
- * ./bin/app images:compress images --dry-run
- */
 final class CompressImagesDirective extends AbstractDirective
 {
     private const PNG_QUALITY_DEFAULT = '45-50';
@@ -55,9 +31,6 @@ final class CompressImagesDirective extends AbstractDirective
 
     private ImageStorageInterface $storage;
 
-    /**
-     * {@inheritDoc}
-     */
     public function getSignature(): string
     {
         return 'images:compress 
@@ -78,17 +51,11 @@ final class CompressImagesDirective extends AbstractDirective
         return StringTypedCollection::from(['imc']);
     }
 
-    /**
-     * {@inheritDoc}
-     */
     public function getDescription(): string
     {
         return 'Compress PNG and JPG/JPEG images using pngquant and jpegoptim';
     }
 
-    /**
-     * {@inheritDoc}
-     */
     protected function beforeExecute(): void
     {
         $this->info('📷 Starting image compression...');
@@ -99,9 +66,6 @@ final class CompressImagesDirective extends AbstractDirective
         $this->ensureDependenciesAreInstalled();
     }
 
-    /**
-     * {@inheritDoc}
-     */
     protected function execute(): ExitCode
     {
         $config = $this->buildCompressionConfig();
@@ -132,9 +96,6 @@ final class CompressImagesDirective extends AbstractDirective
         return ExitCode::SUCCESS;
     }
 
-    /**
-     * {@inheritDoc}
-     */
     protected function afterExecute(ExitCode $exitCode): void
     {
         $this->newLine();
@@ -205,20 +166,6 @@ final class CompressImagesDirective extends AbstractDirective
         }
     }
 
-    /**
-     * @return array{
-     *     source: string,
-     *     destination: string,
-     *     pngQuality: string,
-     *     jpgQuality: int,
-     *     maxSize: int,
-     *     stripMeta: bool,
-     *     recursive: bool,
-     *     dryRun: bool,
-     *     force: bool,
-     *     skipCompressed: bool
-     * }
-     */
     private function buildCompressionConfig(): array
     {
         $maxSizeKB = (int) ($this->getArgument('max-size') ?? 0);
@@ -274,9 +221,6 @@ final class CompressImagesDirective extends AbstractDirective
         return $storagePath;
     }
 
-    /**
-     * @return array<int, string>
-     */
     private function findImagesInDirectory(string $directory): array
     {
         $pattern = $directory.'/*.{jpg,jpeg,png}';
@@ -284,9 +228,6 @@ final class CompressImagesDirective extends AbstractDirective
         return glob($pattern, GLOB_BRACE) ?: [];
     }
 
-    /**
-     * @return array<int, string>
-     */
     private function findImagesRecursively(string $directory): array
     {
         $files = [];
@@ -378,9 +319,7 @@ final class CompressImagesDirective extends AbstractDirective
         }
 
         $relative = $this->getRelativePath($file);
-        $this->line(
-            "   ⏭️  {$relative} - skipped (size < ".$this->formatSize($config['maxSize']).')'
-        );
+        $this->line("   ⏭️  {$relative} - skipped (size < ".$this->formatSize($config['maxSize']).')');
 
         return true;
     }
@@ -445,21 +384,17 @@ final class CompressImagesDirective extends AbstractDirective
             : self::PNG_METADATA_RATIO_UNCOMPRESSED;
     }
 
-    /**
-     * @param array{
-     *     destination: string,
-     *     pngQuality: string,
-     *     jpgQuality: int,
-     *     stripMeta: bool,
-     *     force: bool
-     * } $config
-     */
     private function compressSingleImage(string $file, array $config): void
     {
         $extension = strtolower(pathinfo($file, PATHINFO_EXTENSION));
-        $filename = basename($file);
         $relativePath = $this->getRelativePath($file);
-        $destinationPath = $this->storage->getFullPath($config['destination'].'/'.$filename);
+
+        $destinationPath = $this->storage->getFullPath($config['destination'].'/'.$relativePath);
+        $destinationDir = dirname($destinationPath);
+
+        if (! $this->fileSystem->exists($destinationDir)) {
+            $this->fileSystem->ensureDirectoryExists($destinationDir);
+        }
 
         match ($extension) {
             'png' => $this->compressPng($file, $destinationPath, $config['pngQuality'], $config['force']),
@@ -627,14 +562,53 @@ final class CompressImagesDirective extends AbstractDirective
         return round($bytes, 2).' '.self::FILE_SIZE_UNITS[$unitIndex];
     }
 
-    private function getRelativePath(string $file): string
+    /**
+     * Normalise un chemin pour la comparaison.
+     */
+    private function normalizePath(string $path): string
     {
-        $basePath = storage_path('app/public/');
+        // Remplacer les antislashs par des slashes
+        $path = str_replace('\\', '/', $path);
 
-        if (str_contains($file, $basePath)) {
-            return str_replace($basePath, '', $file);
+        // Si le chemin commence par "storage/", le convertir en chemin absolu
+        if (str_starts_with($path, 'storage/')) {
+            $path = base_path($path);
         }
 
-        return $file;
+        // S'assurer que le chemin se termine par un slash pour les répertoires
+        if (is_dir($path) && ! str_ends_with($path, '/')) {
+            $path .= '/';
+        }
+
+        return $path;
+    }
+
+    /**
+     * Retourne le chemin relatif en supprimant "storage/app/public/images/"
+     * Ex: storage/app/public/images/gallery/clinics/photo.jpg → gallery/clinics/photo.jpg
+     */
+    private function getRelativePath(string $file): string
+    {
+        // Normaliser le chemin du fichier
+        $normalizedFile = $this->normalizePath($file);
+
+        $basePath = $this->normalizePath(storage_path('app/public/images/'));
+
+        if (str_starts_with($normalizedFile, $basePath)) {
+            return ltrim(substr($normalizedFile, strlen($basePath)), '/');
+        }
+
+        $basePath2 = $this->normalizePath(storage_path('app/public/'));
+
+        if (str_starts_with($normalizedFile, $basePath2)) {
+            $relative = ltrim(substr($normalizedFile, strlen($basePath2)), '/');
+            if (str_starts_with($relative, 'images/')) {
+                return substr($relative, 7);
+            }
+
+            return $relative;
+        }
+
+        return basename($file);
     }
 }
