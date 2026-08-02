@@ -11,15 +11,37 @@ use AndyDefer\LaravelImages\Contracts\Storage\ImageStorageInterface;
 use AndyDefer\PhpServices\Contracts\FileSystemInterface;
 use Illuminate\Support\Collection;
 use Override;
+use RuntimeException;
 use Symfony\Component\Process\Process;
 
 /**
- * Directive pour compresser les images (PNG, JPG, JPEG).
+ * CLI directive for compressing PNG, JPG, and JPEG images.
  *
- * Utilise les outils système : pngquant et jpegoptim.
+ * Uses system tools pngquant and jpegoptim to reduce image file sizes.
+ * Supports recursive processing, dry-run simulation, metadata stripping,
+ * and configurable quality settings.
+ *
+ * @example
+ * // Basic compression
+ * ./bin/app images:compress images
+ *
+ * // Compression with custom settings
+ * ./bin/app images:compress images --recursive --strip-meta --png-quality=30-40 --jpg-quality=40
+ *
+ * // Dry-run simulation
+ * ./bin/app images:compress images --dry-run
+ *
+ * // Using alias
+ * ./bin/app imc images
  */
 final class CompressImagesDirective extends AbstractDirective
 {
+    private const PNG_QUALITY_DEFAULT = '45-50';
+
+    private const JPG_QUALITY_DEFAULT = 50;
+
+    private const FILE_SIZE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB'];
+
     private FileSystemInterface $fileSystem;
 
     private ImageStorageInterface $storage;
@@ -62,15 +84,9 @@ final class CompressImagesDirective extends AbstractDirective
         $this->info('📷 Starting image compression...');
         $this->newLine();
 
-        // Récupération des services via le conteneur
-        $app = $this->getApplication();
-        $this->fileSystem = $app->make(FileSystemInterface::class);
-        $this->storage = $app->make(ImageStorageInterface::class);
-
-        $source = $this->getArgument('source');
-        $this->ensureSourceExists($source);
-
-        $this->checkDependencies();
+        $this->initializeServices();
+        $this->ensureSourceExists($this->getArgument('source'));
+        $this->ensureDependenciesAreInstalled();
     }
 
     /**
@@ -78,23 +94,11 @@ final class CompressImagesDirective extends AbstractDirective
      */
     protected function execute(): ExitCode
     {
-        $source = $this->getArgument('source');
-        $destination = $this->getArgument('destination');
-        $pngQuality = $this->getArgument('png-quality') ?? '45-50';
-        $jpgQuality = (int) ($this->getArgument('jpg-quality') ?? 50);
-        $stripMeta = $this->getFlag('strip-meta');
-        $recursive = $this->getFlag('recursive');
-        $dryRun = $this->getFlag('dry-run');
-        $force = $this->getFlag('force');
+        $config = $this->buildCompressionConfig();
 
-        $destination = $destination ?? $source;
+        $this->initializeContext();
 
-        $this->contextSet('processed_count', 0);
-        $this->contextSet('total_size_before', 0);
-        $this->contextSet('total_size_after', 0);
-        $this->contextSet('errors', []);
-
-        $files = $this->findImages($source, $recursive);
+        $files = $this->findImages($config['source'], $config['recursive']);
 
         if ($files->isEmpty()) {
             $this->getConsole()->alertWarning('⚠️ No images found to compress');
@@ -104,22 +108,19 @@ final class CompressImagesDirective extends AbstractDirective
 
         $this->info('📁 Found '.$files->count().' images to process');
 
-        if ($dryRun) {
-            $this->newLine();
-            $this->info('📋 DRY RUN - No changes will be made');
-            $this->newLine();
-            $this->listFiles($files);
+        if ($config['dryRun']) {
+            $this->performDryRun($files);
 
             return ExitCode::SUCCESS;
         }
 
-        $this->ensureDestinationExists($destination);
+        $this->ensureDestinationExists($config['destination']);
 
         foreach ($files as $file) {
-            $this->compressImage($file, $destination, $pngQuality, $jpgQuality, $stripMeta, $force);
+            $this->compressSingleImage($file, $config);
         }
 
-        $this->showSummary();
+        $this->displaySummary();
 
         return ExitCode::SUCCESS;
     }
@@ -133,49 +134,66 @@ final class CompressImagesDirective extends AbstractDirective
         $this->info('✅ Compression completed');
     }
 
-    /**
-     * Vérifie que les outils nécessaires sont installés.
-     */
-    private function checkDependencies(): void
+    private function initializeServices(): void
     {
-        $tools = ['pngquant', 'jpegoptim'];
+        $app = $this->getApplication();
+        $this->fileSystem = $app->make(FileSystemInterface::class);
+        $this->storage = $app->make(ImageStorageInterface::class);
+    }
+
+    private function ensureDependenciesAreInstalled(): void
+    {
+        $requiredTools = ['pngquant', 'jpegoptim'];
         $missing = [];
 
-        foreach ($tools as $tool) {
-            $process = new Process(['which', $tool]);
-            $process->run();
-
-            if (! $process->isSuccessful()) {
+        foreach ($requiredTools as $tool) {
+            if (! $this->isToolInstalled($tool)) {
                 $missing[] = $tool;
             }
         }
 
-        if (! empty($missing)) {
-            $this->error('❌ Required tools not installed: '.implode(', ', $missing));
-            $this->line('📦 Install them with:');
-            $this->line('   sudo apt install '.implode(' ', $missing));
-            throw new \RuntimeException('Missing dependencies');
+        if ($missing === []) {
+            return;
         }
+
+        $this->error('❌ Required tools not installed: '.implode(', ', $missing));
+        $this->line('📦 Install them with:');
+        $this->line('   sudo apt install '.implode(' ', $missing));
+
+        throw new RuntimeException('Missing dependencies: '.implode(', ', $missing));
     }
 
-    /**
-     * Vérifie que la source existe.
-     */
+    private function isToolInstalled(string $tool): bool
+    {
+        $process = new Process(['which', $tool]);
+        $process->run();
+
+        return $process->isSuccessful();
+    }
+
     private function ensureSourceExists(string $source): void
     {
         $fullPath = $this->storage->getFullPath($source);
 
-        if (! $this->fileSystem->exists($fullPath)) {
-            $this->error("❌ Source directory not found: {$source}");
-            throw new \RuntimeException("Source directory not found: {$source}");
+        if ($this->fileSystem->exists($fullPath)) {
+            $this->info("✅ Source directory: {$source}");
+
+            return;
         }
 
-        $this->info("✅ Source directory: {$source}");
+        if ($this->fileSystem->exists($source)) {
+            $this->info("✅ Source directory: {$source}");
+
+            return;
+        }
+
+        $this->error("❌ Source directory not found: {$source}");
+        $this->line('💡 Tip: The path should be relative to the storage disk.');
+        $this->line('   Example: "images" instead of "storage/app/public/images"');
+
+        throw new RuntimeException("Source directory not found: {$source}");
     }
 
-    /**
-     * Vérifie que la destination est accessible.
-     */
     private function ensureDestinationExists(string $destination): void
     {
         $fullPath = $this->storage->getFullPath($destination);
@@ -187,25 +205,70 @@ final class CompressImagesDirective extends AbstractDirective
     }
 
     /**
-     * Trouve les images dans la source.
+     * @return array{
+     *     source: string,
+     *     destination: string,
+     *     pngQuality: string,
+     *     jpgQuality: int,
+     *     stripMeta: bool,
+     *     recursive: bool,
+     *     dryRun: bool,
+     *     force: bool
+     * }
      */
+    private function buildCompressionConfig(): array
+    {
+        return [
+            'source' => $this->getArgument('source'),
+            'destination' => $this->getArgument('destination') ?? $this->getArgument('source'),
+            'pngQuality' => $this->getArgument('png-quality') ?? self::PNG_QUALITY_DEFAULT,
+            'jpgQuality' => (int) ($this->getArgument('jpg-quality') ?? self::JPG_QUALITY_DEFAULT),
+            'stripMeta' => $this->getFlag('strip-meta'),
+            'recursive' => $this->getFlag('recursive'),
+            'dryRun' => $this->getFlag('dry-run'),
+            'force' => $this->getFlag('force'),
+        ];
+    }
+
+    private function initializeContext(): void
+    {
+        $this->contextSet('processed_count', 0);
+        $this->contextSet('total_size_before', 0);
+        $this->contextSet('total_size_after', 0);
+        $this->contextSet('errors', []);
+    }
+
     private function findImages(string $source, bool $recursive): Collection
     {
-        $fullPath = $this->storage->getFullPath($source);
-        $files = [];
+        $basePath = $this->resolveBasePath($source);
 
         if ($recursive) {
-            $files = $this->findImagesRecursively($fullPath);
+            $files = $this->findImagesRecursively($basePath);
         } else {
-            $pattern = $fullPath.'/*.{jpg,jpeg,png}';
+            $pattern = $basePath.'/*.{jpg,jpeg,png}';
             $files = glob($pattern, GLOB_BRACE) ?: [];
         }
 
-        return collect($files)->filter(fn ($file) => is_file($file));
+        return collect($files)->filter(fn ($path): bool => is_file($path));
+    }
+
+    private function resolveBasePath(string $source): string
+    {
+        $storagePath = $this->storage->getFullPath($source);
+
+        if ($this->fileSystem->exists($storagePath)) {
+            return $storagePath;
+        }
+
+        if ($this->fileSystem->exists($source)) {
+            return $source;
+        }
+
+        return $storagePath;
     }
 
     /**
-     * Recherche récursive des images.
+     * @return array<int, string>
      */
     private function findImagesRecursively(string $directory): array
     {
@@ -215,20 +278,27 @@ final class CompressImagesDirective extends AbstractDirective
         );
 
         foreach ($iterator as $file) {
-            if ($file->isFile()) {
-                $extension = strtolower($file->getExtension());
-                if (in_array($extension, ['jpg', 'jpeg', 'png'])) {
-                    $files[] = $file->getPathname();
-                }
+            if (! $file->isFile()) {
+                continue;
+            }
+
+            $extension = strtolower($file->getExtension());
+            if (in_array($extension, ['jpg', 'jpeg', 'png'])) {
+                $files[] = $file->getPathname();
             }
         }
 
         return $files;
     }
 
-    /**
-     * Liste les fichiers (pour dry-run).
-     */
+    private function performDryRun(Collection $files): void
+    {
+        $this->newLine();
+        $this->info('📋 DRY RUN - No changes will be made');
+        $this->newLine();
+        $this->listFiles($files);
+    }
+
     private function listFiles(Collection $files): void
     {
         $this->line('📋 Files to compress:');
@@ -236,92 +306,100 @@ final class CompressImagesDirective extends AbstractDirective
 
         foreach ($files as $file) {
             $size = $this->fileSystem->size($file);
-            $sizeHuman = $this->formatSize($size);
             $relative = $this->getRelativePath($file);
-            $this->line("   • {$relative} ({$sizeHuman})");
+            $this->line("   • {$relative} ({$this->formatSize($size)})");
         }
 
-        $totalSize = $files->reduce(fn ($carry, $file) => $carry + $this->fileSystem->size($file), 0);
+        $totalSize = $files->reduce(
+            fn ($carry, $file) => $carry + $this->fileSystem->size($file),
+            0
+        );
+
         $this->newLine();
         $this->line('📊 Total: '.$files->count().' files, '.$this->formatSize($totalSize));
     }
 
     /**
-     * Compresse une image.
+     * @param array{
+     *     source: string,
+     *     destination: string,
+     *     pngQuality: string,
+     *     jpgQuality: int,
+     *     stripMeta: bool,
+     *     recursive: bool,
+     *     dryRun: bool,
+     *     force: bool
+     * } $config
      */
-    private function compressImage(
-        string $file,
-        string $destination,
-        string $pngQuality,
-        int $jpgQuality,
-        bool $stripMeta,
-        bool $force
-    ): void {
+    private function compressSingleImage(string $file, array $config): void
+    {
         $extension = strtolower(pathinfo($file, PATHINFO_EXTENSION));
         $filename = basename($file);
         $relativePath = $this->getRelativePath($file);
-        $destinationPath = $this->storage->getFullPath($destination.'/'.$filename);
+        $destinationPath = $this->storage->getFullPath($config['destination'].'/'.$filename);
 
         $sizeBefore = $this->fileSystem->size($file);
 
-        if ($extension === 'png') {
-            $this->compressPng($file, $destinationPath, $pngQuality, $force);
-        } elseif (in_array($extension, ['jpg', 'jpeg'])) {
-            $this->compressJpg($file, $destinationPath, $jpgQuality, $stripMeta, $force);
-        }
+        match ($extension) {
+            'png' => $this->compressPng($file, $destinationPath, $config['pngQuality'], $config['force']),
+            'jpg', 'jpeg' => $this->compressJpg(
+                $file,
+                $destinationPath,
+                $config['jpgQuality'],
+                $config['stripMeta'],
+                $config['force']
+            ),
+            default => null,
+        };
 
-        $sizeAfter = $this->fileSystem->exists($destinationPath) ? $this->fileSystem->size($destinationPath) : $sizeBefore;
+        $this->updateStats($file, $destinationPath, $relativePath);
+    }
 
-        $this->contextSet('processed_count', $this->contextGet('processed_count') + 1);
-        $this->contextSet('total_size_before', $this->contextGet('total_size_before') + $sizeBefore);
-        $this->contextSet('total_size_after', $this->contextGet('total_size_after') + $sizeAfter);
-
-        $saved = $sizeBefore - $sizeAfter;
-        $savedPercent = $sizeBefore > 0 ? round(($saved / $sizeBefore) * 100, 1) : 0;
-
-        if ($saved > 0) {
-            $savedHuman = $this->formatSize($saved);
-            $this->info("   ✅ {$relativePath} - saved {$savedHuman} ({$savedPercent}%)");
+    private function compressPng(string $source, string $destination, string $quality, bool $force): void
+    {
+        if ($source === $destination && ! $force) {
+            $this->compressPngWithTempFile($source, $destination, $quality);
         } else {
-            $this->line("   ⏭️  {$relativePath} - no size reduction");
+            $this->compressPngDirect($source, $destination, $quality);
         }
     }
 
-    /**
-     * Compresse une image PNG.
-     */
-    private function compressPng(string $source, string $destination, string $quality, bool $force): void
+    private function compressPngDirect(string $source, string $destination, string $quality): void
     {
-        $args = [
+        $process = new Process([
             'pngquant',
             '--quality='.$quality,
             '--force',
             '--output',
             $destination,
             $source,
-        ];
+        ]);
 
-        if ($source === $destination && ! $force) {
-            $tempFile = $destination.'.tmp';
-            $args = [
-                'pngquant',
-                '--quality='.$quality,
-                '--force',
-                '--output',
-                $tempFile,
-                $source,
-            ];
+        $process->run();
 
-            $process = new Process($args);
-            $process->run();
+        if (! $process->isSuccessful() && $process->getErrorOutput()) {
+            $this->warn("⚠️ Error compressing {$source}: ".$process->getErrorOutput());
+        }
+    }
 
-            if ($process->isSuccessful() && $this->fileSystem->exists($tempFile)) {
-                $this->fileSystem->delete($source);
-                $this->fileSystem->move($tempFile, $destination);
-            }
-        } else {
-            $process = new Process($args);
-            $process->run();
+    private function compressPngWithTempFile(string $source, string $destination, string $quality): void
+    {
+        $tempFile = $destination.'.tmp';
+
+        $process = new Process([
+            'pngquant',
+            '--quality='.$quality,
+            '--force',
+            '--output',
+            $tempFile,
+            $source,
+        ]);
+
+        $process->run();
+
+        if ($process->isSuccessful() && $this->fileSystem->exists($tempFile)) {
+            $this->fileSystem->delete($source);
+            $this->fileSystem->move($tempFile, $destination);
         }
 
         if (! $process->isSuccessful() && $process->getErrorOutput()) {
@@ -329,9 +407,6 @@ final class CompressImagesDirective extends AbstractDirective
         }
     }
 
-    /**
-     * Compresse une image JPG/JPEG.
-     */
     private function compressJpg(string $source, string $destination, int $quality, bool $stripMeta, bool $force): void
     {
         $args = [
@@ -354,22 +429,53 @@ final class CompressImagesDirective extends AbstractDirective
         $process->run();
 
         if ($source !== $destination && $process->isSuccessful()) {
-            // jpegoptim écrase le fichier source, on vérifie si le fichier a été créé
-            $sourceSize = $this->fileSystem->size($source);
-            $destSize = $this->fileSystem->exists($destination) ? $this->fileSystem->size($destination) : 0;
-
-            // Si le fichier source est plus petit que la destination, on le garde
-            if ($sourceSize < $destSize) {
-                $this->fileSystem->delete($destination);
-                $this->fileSystem->copy($source, $destination);
-            }
+            $this->handleJpgDestinationFallback($source, $destination);
         }
     }
 
-    /**
-     * Affiche le résumé de la compression.
-     */
-    private function showSummary(): void
+    private function handleJpgDestinationFallback(string $source, string $destination): void
+    {
+        $sourceSize = $this->fileSystem->size($source);
+        $destSize = $this->fileSystem->exists($destination)
+            ? $this->fileSystem->size($destination)
+            : 0;
+
+        if ($sourceSize < $destSize) {
+            $this->fileSystem->delete($destination);
+            $this->fileSystem->copy($source, $destination);
+        }
+    }
+
+    private function updateStats(string $file, string $destinationPath, string $relativePath): void
+    {
+        $sizeBefore = $this->contextGet('total_size_before');
+        $sizeAfter = $this->contextGet('total_size_after');
+
+        $fileSizeBefore = $this->fileSystem->size($file);
+        $fileSizeAfter = $this->fileSystem->exists($destinationPath)
+            ? $this->fileSystem->size($destinationPath)
+            : $fileSizeBefore;
+
+        $this->contextSet('processed_count', $this->contextGet('processed_count') + 1);
+        $this->contextSet('total_size_before', $sizeBefore + $fileSizeBefore);
+        $this->contextSet('total_size_after', $sizeAfter + $fileSizeAfter);
+
+        $this->logCompressionResult($relativePath, $fileSizeBefore, $fileSizeAfter);
+    }
+
+    private function logCompressionResult(string $relativePath, int $sizeBefore, int $sizeAfter): void
+    {
+        $saved = $sizeBefore - $sizeAfter;
+        $savedPercent = $sizeBefore > 0 ? round(($saved / $sizeBefore) * 100, 1) : 0;
+
+        if ($saved > 0) {
+            $this->info("   ✅ {$relativePath} - saved {$this->formatSize($saved)} ({$savedPercent}%)");
+        } else {
+            $this->line("   ⏭️  {$relativePath} - no size reduction");
+        }
+    }
+
+    private function displaySummary(): void
     {
         $count = $this->contextGet('processed_count');
         $sizeBefore = $this->contextGet('total_size_before');
@@ -385,29 +491,26 @@ final class CompressImagesDirective extends AbstractDirective
         $this->line('   💾 Space saved: '.$this->formatSize($saved)." ({$savedPercent}%)");
     }
 
-    /**
-     * Formate une taille en bytes en format lisible.
-     */
     private function formatSize(int $bytes): string
     {
-        $units = ['B', 'KB', 'MB', 'GB', 'TB'];
-        $i = 0;
+        $unitIndex = 0;
 
-        while ($bytes >= 1024 && $i < count($units) - 1) {
+        while ($bytes >= 1024 && $unitIndex < count(self::FILE_SIZE_UNITS) - 1) {
             $bytes /= 1024;
-            $i++;
+            $unitIndex++;
         }
 
-        return round($bytes, 2).' '.$units[$i];
+        return round($bytes, 2).' '.self::FILE_SIZE_UNITS[$unitIndex];
     }
 
-    /**
-     * Obtient le chemin relatif d'un fichier.
-     */
     private function getRelativePath(string $file): string
     {
         $basePath = storage_path('app/public/');
 
-        return str_replace($basePath, '', $file);
+        if (str_contains($file, $basePath)) {
+            return str_replace($basePath, '', $file);
+        }
+
+        return $file;
     }
 }
