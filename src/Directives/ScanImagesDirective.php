@@ -20,6 +20,8 @@ use RuntimeException;
  * (path, filename, size, dimensions, MIME type, etc.), and exports the results
  * as either JSON or a PHP array file.
  *
+ * The path structure preserves the original directory hierarchy relative to the source.
+ *
  * @example
  * // Basic scan with JSON output
  * ./bin/app images:scan images
@@ -195,7 +197,7 @@ final class ScanImagesDirective extends AbstractDirective
         $images = new Collection;
 
         foreach ($files as $file) {
-            $imageData = $this->extractImageData($file, $config);
+            $imageData = $this->extractImageData($file, $config, $basePath);
 
             if ($imageData !== null) {
                 $images->add($imageData);
@@ -305,10 +307,18 @@ final class ScanImagesDirective extends AbstractDirective
             || str_contains($path, '/thumbnails/');
     }
 
-    private function extractImageData(string $file, array $config): ?array
+    /**
+     * Extracts metadata from an image file preserving directory structure.
+     *
+     * @param  string  $file  Absolute path to the image file
+     * @param  array<string, mixed>  $config  Scan configuration
+     * @param  string  $basePath  Base path to strip from the relative path
+     * @return array<string, mixed>|null Image metadata or null on error
+     */
+    private function extractImageData(string $file, array $config, string $basePath): ?array
     {
         try {
-            $relativePath = $this->getRelativePath($file);
+            $relativePath = $this->getRelativePath($file, $basePath);
             $extension = strtolower(pathinfo($file, PATHINFO_EXTENSION));
             $imageExtension = ImageExtension::tryFrom($extension);
             $dimensions = $this->getImageDimensions($file);
@@ -405,14 +415,21 @@ final class ScanImagesDirective extends AbstractDirective
         return $path;
     }
 
-    private function getRelativePath(string $file): string
+    /**
+     * Gets the relative path of a file while preserving directory structure.
+     *
+     * @param  string  $file  Absolute path to the file
+     * @param  string  $basePath  Base path to strip
+     * @return string Relative path preserving directory structure
+     */
+    private function getRelativePath(string $file, string $basePath): string
     {
-        $basePath = storage_path('app/public/');
-
-        if (str_contains($file, $basePath)) {
-            return str_replace($basePath, '', $file);
+        // Si le fichier est dans le basePath, on garde la structure relative
+        if (str_starts_with($file, $basePath)) {
+            return ltrim(substr($file, strlen($basePath)), DIRECTORY_SEPARATOR);
         }
 
+        // Fallback: retourner le chemin complet
         return $file;
     }
 }
