@@ -45,7 +45,7 @@ use AndyDefer\PhpVo\ValueObjects\DateTimeVO;
 final class ImageData extends AbstractData
 {
     public function __construct(
-        public readonly int $id,
+        public readonly string $id,
         public readonly ImagePathVO $path,
         public readonly string $filename,
         public readonly string $originalFilename,
