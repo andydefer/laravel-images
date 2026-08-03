@@ -10,6 +10,7 @@ use AndyDefer\LaravelImages\Models\Album;
 use AndyDefer\LaravelImages\Models\Image;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 /**
  * Trait for models that can have images and albums.
@@ -35,6 +36,30 @@ use Illuminate\Database\Eloquent\Collection;
  */
 trait HasMediables
 {
+    // ============================================================
+    // RELATIONSHIPS
+    // ============================================================
+
+    /**
+     * Get all images for this model.
+     *
+     * @return MorphMany<Image>
+     */
+    public function images(): MorphMany
+    {
+        return $this->morphMany(Image::class, 'imageable');
+    }
+
+    /**
+     * Get all albums for this model.
+     *
+     * @return MorphMany<Album>
+     */
+    public function albums(): MorphMany
+    {
+        return $this->morphMany(Album::class, 'albumable');
+    }
+
     // ============================================================
     // IMAGE ATTRIBUTES
     // ============================================================

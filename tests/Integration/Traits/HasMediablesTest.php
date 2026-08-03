@@ -10,21 +10,10 @@ use AndyDefer\LaravelImages\Models\Album;
 use AndyDefer\LaravelImages\Models\Image;
 use AndyDefer\LaravelImages\Tests\Fixtures\Models\TestUser;
 use AndyDefer\LaravelImages\Tests\IntegrationTestCase;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
-/**
- * Integration tests for the HasMediables trait.
- *
- * Verifies that the trait correctly provides computed attributes
- * for images and albums without requiring explicit relations.
- *
- * @group integration
- * @group traits
- * @group has-mediables
- *
- * @author Andy Defer
- * @license MIT
- */
 final class HasMediablesTest extends IntegrationTestCase
 {
     use RefreshDatabase;
@@ -63,7 +52,6 @@ final class HasMediablesTest extends IntegrationTestCase
             ->for($this->user, 'imageable')
             ->create();
 
-        // Refresh the model to reload attributes
         $this->user->refresh();
 
         // Assert: User now has images
@@ -423,7 +411,6 @@ final class HasMediablesTest extends IntegrationTestCase
         $this->assertIsBool($this->user->has_albums);
         $this->assertIsInt($this->user->albums_count);
 
-        // Assert: Attributes don't throw errors
         $this->user->primary_image;
         $this->user->avatar;
         $this->user->cover;
@@ -459,7 +446,6 @@ final class HasMediablesTest extends IntegrationTestCase
         $this->user->refresh();
 
         // Act: Access multiple attributes
-        // Should not cause N+1 queries
         $this->user->has_images;
         $this->user->images_count;
         $this->user->primary_image;
@@ -476,8 +462,7 @@ final class HasMediablesTest extends IntegrationTestCase
         $this->user->public_albums;
         $this->user->private_albums;
 
-        // Each attribute executes its own query
-        // This is expected behavior without eager loading
+        // Assert: Each attribute executes its own query
         $this->assertTrue(true);
     }
 
@@ -487,7 +472,7 @@ final class HasMediablesTest extends IntegrationTestCase
 
     public function test_trait_works_without_any_data(): void
     {
-        // Create a fresh user
+        // Arrange: Create a fresh user
         $user = TestUser::create([
             'name' => 'Empty User',
             'email' => 'empty@example.com',
@@ -533,19 +518,16 @@ final class HasMediablesTest extends IntegrationTestCase
             'age' => 30,
         ]);
 
-        // Create images only for user1
         Image::factory()
             ->count(3)
             ->for($user1, 'imageable')
             ->create();
 
-        // Create albums only for user2
         Album::factory()
             ->count(2)
             ->withAlbumable($user2)
             ->create();
 
-        // Act: Refresh both users
         $user1->refresh();
         $user2->refresh();
 
@@ -559,5 +541,557 @@ final class HasMediablesTest extends IntegrationTestCase
         $this->assertEquals(0, $user1->albums_count);
         $this->assertTrue($user2->has_albums);
         $this->assertEquals(2, $user2->albums_count);
+    }
+
+    // ============================================================
+    // IMAGE RELATION TESTS
+    // ============================================================
+
+    public function test_images_relation_returns_morph_many_instance(): void
+    {
+        // Act: Get the relation
+        $relation = $this->user->images();
+
+        // Assert: Relation is a MorphMany instance with correct properties
+        $this->assertInstanceOf(MorphMany::class, $relation);
+        $this->assertEquals(Image::class, get_class($relation->getRelated()));
+        $this->assertEquals('imageable_type', $relation->getMorphType());
+        $this->assertEquals('imageable_id', $relation->getForeignKeyName());
+    }
+
+    public function test_images_relation_returns_correct_images(): void
+    {
+        // Arrange: Create images for the user
+        $images = Image::factory()
+            ->count(3)
+            ->for($this->user, 'imageable')
+            ->create();
+
+        // Act: Get images via relation
+        $retrievedImages = $this->user->images()->get();
+
+        // Assert: All images are returned
+        $this->assertCount(3, $retrievedImages);
+        $this->assertEquals($images->pluck('id')->toArray(), $retrievedImages->pluck('id')->toArray());
+    }
+
+    public function test_images_relation_respects_query_constraints(): void
+    {
+        // Arrange: Create images with different types
+        Image::factory()
+            ->count(2)
+            ->avatar()
+            ->for($this->user, 'imageable')
+            ->create();
+
+        Image::factory()
+            ->count(3)
+            ->gallery()
+            ->for($this->user, 'imageable')
+            ->create();
+
+        // Act: Query only gallery images
+        $galleryImages = $this->user->images()
+            ->where('type', ImageType::GALLERY)
+            ->get();
+
+        // Assert: Only gallery images are returned
+        $this->assertCount(3, $galleryImages);
+        foreach ($galleryImages as $image) {
+            $this->assertEquals(ImageType::GALLERY, $image->type);
+        }
+    }
+
+    public function test_images_relation_supports_eager_loading(): void
+    {
+        // Arrange: Create images for the user
+        Image::factory()
+            ->count(5)
+            ->for($this->user, 'imageable')
+            ->create();
+
+        // Act: Eager load images
+        $user = TestUser::with('images')->find($this->user->id);
+
+        // Assert: Images are loaded
+        $this->assertTrue($user->relationLoaded('images'));
+        $this->assertCount(5, $user->images);
+    }
+
+    public function test_images_relation_supports_ordering(): void
+    {
+        // Arrange: Create images with different order values
+        $orderValues = [3, 1, 4, 2, 5];
+        foreach ($orderValues as $order) {
+            Image::factory()
+                ->for($this->user, 'imageable')
+                ->create(['order' => $order]);
+        }
+
+        // Act: Get images ordered by order
+        $orderedImages = $this->user->images()
+            ->orderBy('order')
+            ->get();
+
+        // Assert: Images are correctly ordered
+        $this->assertEquals([1, 2, 3, 4, 5], $orderedImages->pluck('order')->toArray());
+    }
+
+    public function test_images_relation_supports_pagination(): void
+    {
+        // Arrange: Create 15 images
+        Image::factory()
+            ->count(15)
+            ->for($this->user, 'imageable')
+            ->create();
+
+        // Act: Paginate images
+        $paginated = $this->user->images()->paginate(5);
+
+        // Assert: Pagination works
+        $this->assertCount(5, $paginated);
+        $this->assertEquals(15, $paginated->total());
+        $this->assertEquals(3, $paginated->lastPage());
+    }
+
+    public function test_images_relation_returns_empty_collection_when_no_images(): void
+    {
+        // Act: Get images via relation
+        $images = $this->user->images()->get();
+
+        // Assert: Empty collection is returned
+        $this->assertInstanceOf(Collection::class, $images);
+        $this->assertCount(0, $images);
+        $this->assertTrue($images->isEmpty());
+    }
+
+    // ============================================================
+    // ALBUM RELATION TESTS
+    // ============================================================
+
+    public function test_albums_relation_returns_morph_many_instance(): void
+    {
+        // Act: Get the relation
+        $relation = $this->user->albums();
+
+        // Assert: Relation is a MorphMany instance with correct properties
+        $this->assertInstanceOf(MorphMany::class, $relation);
+        $this->assertEquals(Album::class, get_class($relation->getRelated()));
+        $this->assertEquals('albumable_type', $relation->getMorphType());
+        $this->assertEquals('albumable_id', $relation->getForeignKeyName());
+    }
+
+    public function test_albums_relation_returns_correct_albums(): void
+    {
+        // Arrange: Create albums for the user
+        $albums = Album::factory()
+            ->count(3)
+            ->withAlbumable($this->user)
+            ->create();
+
+        // Act: Get albums via relation
+        $retrievedAlbums = $this->user->albums()->get();
+
+        // Assert: All albums are returned
+        $this->assertCount(3, $retrievedAlbums);
+        $this->assertEquals($albums->pluck('id')->toArray(), $retrievedAlbums->pluck('id')->toArray());
+    }
+
+    public function test_albums_relation_respects_query_constraints(): void
+    {
+        // Arrange: Create albums with different visibility
+        Album::factory()
+            ->count(2)
+            ->public()
+            ->withAlbumable($this->user)
+            ->create();
+
+        Album::factory()
+            ->count(3)
+            ->private()
+            ->withAlbumable($this->user)
+            ->create();
+
+        // Act: Query only public albums
+        $publicAlbums = $this->user->albums()
+            ->where('is_public', BinaryChoice::YES)
+            ->get();
+
+        // Assert: Only public albums are returned
+        $this->assertCount(2, $publicAlbums);
+        foreach ($publicAlbums as $album) {
+            $this->assertEquals(BinaryChoice::YES, $album->is_public);
+        }
+    }
+
+    public function test_albums_relation_supports_eager_loading(): void
+    {
+        // Arrange: Create albums for the user
+        Album::factory()
+            ->count(5)
+            ->withAlbumable($this->user)
+            ->create();
+
+        // Act: Eager load albums
+        $user = TestUser::with('albums')->find($this->user->id);
+
+        // Assert: Albums are loaded
+        $this->assertTrue($user->relationLoaded('albums'));
+        $this->assertCount(5, $user->albums);
+    }
+
+    public function test_albums_relation_supports_ordering(): void
+    {
+        // Arrange: Create albums with different created_at dates
+        $dates = [
+            now()->subDays(5),
+            now()->subDays(2),
+            now()->subDays(10),
+            now()->subDays(1),
+            now()->subDays(7),
+        ];
+
+        foreach ($dates as $date) {
+            Album::factory()
+                ->withAlbumable($this->user)
+                ->create(['created_at' => $date]);
+        }
+
+        // Act: Get albums ordered by created_at
+        $orderedAlbums = $this->user->albums()
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        // Assert: Albums are correctly ordered
+        $orderedDates = $orderedAlbums->pluck('created_at')->map(fn ($d) => $d->timestamp)->toArray();
+        $sortedDates = collect($dates)->sortDesc()->values()->map(fn ($d) => $d->timestamp)->toArray();
+        $this->assertEquals($sortedDates, $orderedDates);
+    }
+
+    public function test_albums_relation_supports_pagination(): void
+    {
+        // Arrange: Create 15 albums
+        Album::factory()
+            ->count(15)
+            ->withAlbumable($this->user)
+            ->create();
+
+        // Act: Paginate albums
+        $paginated = $this->user->albums()->paginate(5);
+
+        // Assert: Pagination works
+        $this->assertCount(5, $paginated);
+        $this->assertEquals(15, $paginated->total());
+        $this->assertEquals(3, $paginated->lastPage());
+    }
+
+    public function test_albums_relation_returns_empty_collection_when_no_albums(): void
+    {
+        // Act: Get albums via relation
+        $albums = $this->user->albums()->get();
+
+        // Assert: Empty collection is returned
+        $this->assertInstanceOf(Collection::class, $albums);
+        $this->assertCount(0, $albums);
+        $this->assertTrue($albums->isEmpty());
+    }
+
+    // ============================================================
+    // CHAINING RELATION TESTS
+    // ============================================================
+
+    public function test_can_chain_image_relation_with_other_constraints(): void
+    {
+        // Arrange: Create images with various properties
+        Image::factory()
+            ->avatar()
+            ->for($this->user, 'imageable')
+            ->create(['is_primary' => true]);
+
+        Image::factory()
+            ->avatar()
+            ->for($this->user, 'imageable')
+            ->create(['is_primary' => false]);
+
+        Image::factory()
+            ->gallery()
+            ->for($this->user, 'imageable')
+            ->create();
+
+        // Act: Chain constraints
+        $primaryAvatars = $this->user->images()
+            ->where('type', ImageType::AVATAR)
+            ->where('is_primary', true)
+            ->get();
+
+        // Assert: Only primary avatars are returned
+        $this->assertCount(1, $primaryAvatars);
+        $this->assertEquals(ImageType::AVATAR, $primaryAvatars->first()->type);
+        $this->assertTrue($primaryAvatars->first()->is_primary);
+    }
+
+    public function test_can_chain_album_relation_with_other_constraints(): void
+    {
+        // Arrange: Create albums with various properties
+        Album::factory()
+            ->public()
+            ->featured()
+            ->withAlbumable($this->user)
+            ->create();
+
+        Album::factory()
+            ->public()
+            ->withAlbumable($this->user)
+            ->create();
+
+        Album::factory()
+            ->private()
+            ->withAlbumable($this->user)
+            ->create();
+
+        // Act: Chain constraints
+        $featuredPublicAlbums = $this->user->albums()
+            ->where('is_public', BinaryChoice::YES)
+            ->where('is_featured', BinaryChoice::YES)
+            ->get();
+
+        // Assert: Only featured public albums are returned
+        $this->assertCount(1, $featuredPublicAlbums);
+        $this->assertEquals(BinaryChoice::YES, $featuredPublicAlbums->first()->is_public);
+        $this->assertEquals(BinaryChoice::YES, $featuredPublicAlbums->first()->is_featured);
+    }
+
+    // ============================================================
+    // N+1 QUERY PREVENTION TESTS
+    // ============================================================
+
+    public function test_eager_loading_prevents_n_plus_1_for_images(): void
+    {
+        // Note: L'utilisateur ID 1 est créé dans setUp(), on commence à ID 2
+        for ($i = 2; $i <= 6; $i++) {
+            $user = TestUser::create([
+                'name' => "User {$i}",
+                'email' => "user{$i}@example.com",
+                'status' => 'active',
+                'role' => 'admin',
+                'age' => 25 + $i,
+            ]);
+
+            for ($j = 0; $j < 3; $j++) {
+                Image::factory()->create([
+                    'imageable_type' => TestUser::class,
+                    'imageable_id' => $user->id,
+                ]);
+            }
+        }
+
+        $this->assertDatabaseCount('images', 15);
+
+        // Act: Without eager loading (N+1)
+        $this->app['db']->enableQueryLog();
+        $this->app['db']->flushQueryLog();
+
+        $users = TestUser::where('id', '>=', 2)->get();
+        foreach ($users as $user) {
+            $count = $user->images()->count();
+            $this->assertEquals(3, $count);
+        }
+
+        $queriesWithoutEager = count($this->app['db']->getQueryLog());
+
+        // Act: With eager loading
+        $this->app['db']->flushQueryLog();
+
+        $users = TestUser::where('id', '>=', 2)->with('images')->get();
+        foreach ($users as $user) {
+            $count = $user->images->count();
+            $this->assertEquals(3, $count);
+        }
+
+        $queriesWithEager = count($this->app['db']->getQueryLog());
+
+        // Assert: Eager loading uses fewer queries
+        $this->assertGreaterThan(0, $queriesWithoutEager);
+        $this->assertLessThan($queriesWithoutEager, $queriesWithEager);
+    }
+
+    public function test_eager_loading_prevents_n_plus_1_for_albums(): void
+    {
+        // Arrange: Create users with albums
+        for ($i = 2; $i <= 6; $i++) {
+            $user = TestUser::create([
+                'name' => "User {$i}",
+                'email' => "user{$i}@example.com",
+                'status' => 'active',
+                'role' => 'admin',
+                'age' => 25 + $i,
+            ]);
+
+            for ($j = 0; $j < 2; $j++) {
+                Album::factory()->create([
+                    'albumable_type' => TestUser::class,
+                    'albumable_id' => $user->id,
+                ]);
+            }
+        }
+
+        $this->assertDatabaseCount('albums', 10);
+
+        // Act: Without eager loading (N+1)
+        $this->app['db']->enableQueryLog();
+        $this->app['db']->flushQueryLog();
+
+        $users = TestUser::where('id', '>=', 2)->get();
+        foreach ($users as $user) {
+            $count = $user->albums()->count();
+            $this->assertEquals(2, $count);
+        }
+
+        $queriesWithoutEager = count($this->app['db']->getQueryLog());
+
+        // Act: With eager loading
+        $this->app['db']->flushQueryLog();
+
+        $users = TestUser::where('id', '>=', 2)->with('albums')->get();
+        foreach ($users as $user) {
+            $count = $user->albums->count();
+            $this->assertEquals(2, $count);
+        }
+
+        $queriesWithEager = count($this->app['db']->getQueryLog());
+
+        // Assert: Eager loading uses fewer queries
+        $this->assertGreaterThan(0, $queriesWithoutEager);
+        $this->assertLessThan($queriesWithoutEager, $queriesWithEager);
+    }
+
+    // ============================================================
+    // POLYMORPHIC RELATION TESTS
+    // ============================================================
+
+    public function test_images_relation_works_with_different_imageable_types(): void
+    {
+        // Arrange: Create different parent models
+        $user = TestUser::create([
+            'name' => 'Another User',
+            'email' => 'another@example.com',
+            'status' => 'active',
+            'role' => 'admin',
+            'age' => 25,
+        ]);
+
+        Image::factory()
+            ->count(2)
+            ->for($this->user, 'imageable')
+            ->create();
+
+        Image::factory()
+            ->count(3)
+            ->for($user, 'imageable')
+            ->create();
+
+        // Act: Get images for each user
+        $user1Images = $this->user->images()->get();
+        $user2Images = $user->images()->get();
+
+        // Assert: Each user has correct images
+        $this->assertCount(2, $user1Images);
+        $this->assertCount(3, $user2Images);
+
+        foreach ($user1Images as $image) {
+            $this->assertEquals($this->user->getMorphClass(), $image->imageable_type);
+            $this->assertEquals($this->user->id, $image->imageable_id);
+        }
+    }
+
+    public function test_albums_relation_works_with_different_albumable_types(): void
+    {
+        // Arrange: Create different parent models
+        $user = TestUser::create([
+            'name' => 'Another User',
+            'email' => 'another@example.com',
+            'status' => 'active',
+            'role' => 'admin',
+            'age' => 25,
+        ]);
+
+        Album::factory()
+            ->count(2)
+            ->withAlbumable($this->user)
+            ->create();
+
+        Album::factory()
+            ->count(3)
+            ->withAlbumable($user)
+            ->create();
+
+        // Act: Get albums for each user
+        $user1Albums = $this->user->albums()->get();
+        $user2Albums = $user->albums()->get();
+
+        // Assert: Each user has correct albums
+        $this->assertCount(2, $user1Albums);
+        $this->assertCount(3, $user2Albums);
+
+        foreach ($user1Albums as $album) {
+            $this->assertEquals($this->user->getMorphClass(), $album->albumable_type);
+            $this->assertEquals($this->user->id, $album->albumable_id);
+        }
+    }
+
+    // ============================================================
+    // SOFT DELETE TESTS
+    // ============================================================
+
+    public function test_images_relation_respects_soft_deletes(): void
+    {
+        // Arrange: Create images with one soft-deleted
+        $images = Image::factory()
+            ->count(3)
+            ->for($this->user, 'imageable')
+            ->create();
+
+        $imageToDelete = $images->first();
+        $imageToDelete->delete();
+
+        // Act: Get images via relation
+        $retrievedImages = $this->user->images()->get();
+
+        // Assert: Soft-deleted image is not returned by default
+        $this->assertCount(2, $retrievedImages);
+        $this->assertNotContains($imageToDelete->id, $retrievedImages->pluck('id')->toArray());
+
+        // Act: Get images with trashed
+        $allImages = $this->user->images()->withTrashed()->get();
+
+        // Assert: Can include soft-deleted images
+        $this->assertCount(3, $allImages);
+        $this->assertContains($imageToDelete->id, $allImages->pluck('id')->toArray());
+    }
+
+    public function test_albums_relation_respects_soft_deletes(): void
+    {
+        // Arrange: Create albums with one soft-deleted
+        $albums = Album::factory()
+            ->count(3)
+            ->withAlbumable($this->user)
+            ->create();
+
+        $albumToDelete = $albums->first();
+        $albumToDelete->delete();
+
+        // Act: Get albums via relation
+        $retrievedAlbums = $this->user->albums()->get();
+
+        // Assert: Soft-deleted album is not returned by default
+        $this->assertCount(2, $retrievedAlbums);
+        $this->assertNotContains($albumToDelete->id, $retrievedAlbums->pluck('id')->toArray());
+
+        // Act: Get albums with trashed
+        $allAlbums = $this->user->albums()->withTrashed()->get();
+
+        // Assert: Can include soft-deleted albums
+        $this->assertCount(3, $allAlbums);
+        $this->assertContains($albumToDelete->id, $allAlbums->pluck('id')->toArray());
     }
 }
