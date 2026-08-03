@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use AndyDefer\LaravelCluster\Enums\BinaryChoice;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -95,8 +96,8 @@ return new class extends Migration
      */
     private function addVisibilityAndFeatureColumns(Blueprint $table): void
     {
-        $table->boolean('is_public')->default(true);
-        $table->boolean('is_featured')->default(false);
+        $table->string('is_public')->default(BinaryChoice::YES);
+        $table->string('is_featured')->default(BinaryChoice::YES);
     }
 
     /**

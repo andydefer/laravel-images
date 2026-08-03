@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace AndyDefer\LaravelImages\ValueObjects;
 
 use AndyDefer\DomainStructures\Abstracts\AbstractValueObject;
-use AndyDefer\DomainStructures\Utils\StrictAssociative;
 
 /**
  * Value Object for image path manipulation.
@@ -184,18 +183,12 @@ final class ImagePathVO extends AbstractValueObject
     }
 
     /**
-     * Returns the path components as a StrictAssociative object.
+     * Returns the path components as a string
      *
-     * @return StrictAssociative The path components
+     * @return string The path components
      */
-    public function getValue(): StrictAssociative
+    public function getValue(): string
     {
-        return StrictAssociative::from([
-            'full_path' => $this->fullPath,
-            'directory' => $this->directory,
-            'filename' => $this->filename,
-            'basename' => $this->basename,
-            'extension' => $this->extension,
-        ]);
+        return $this->fullPath;
     }
 }
