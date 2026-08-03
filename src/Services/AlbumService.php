@@ -76,7 +76,7 @@ final class AlbumService implements AlbumServiceInterface
     /**
      * {@inheritDoc}
      */
-    public function addImageToAlbum(Album $album, int $imageId, int $order = self::DEFAULT_ALBUM_ORDER): void
+    public function addImageToAlbum(Album $album, string $imageId, int $order = self::DEFAULT_ALBUM_ORDER): void
     {
         $maxOrder = $album->images()->max('album_image.order') ?? 0;
         $order = $order ?: $maxOrder + 1;
@@ -89,7 +89,7 @@ final class AlbumService implements AlbumServiceInterface
     /**
      * {@inheritDoc}
      */
-    public function removeImageFromAlbum(Album $album, int $imageId): void
+    public function removeImageFromAlbum(Album $album, string $imageId): void
     {
         $album->images()->detach($imageId);
         $album->load('images');
@@ -107,7 +107,7 @@ final class AlbumService implements AlbumServiceInterface
     /**
      * {@inheritDoc}
      */
-    public function setCoverImage(Album $album, int $imageId): void
+    public function setCoverImage(Album $album, string $imageId): void
     {
         $album->cover_image_id = $imageId;
         $album->save();
@@ -153,7 +153,7 @@ final class AlbumService implements AlbumServiceInterface
     /**
      * {@inheritDoc}
      */
-    public function updateAlbum(int $id, AlbumOptionsRecord $options): Album
+    public function updateAlbum(string $id, AlbumOptionsRecord $options): Album
     {
         $album = $this->albumRepository->find($id);
 
@@ -175,7 +175,7 @@ final class AlbumService implements AlbumServiceInterface
     /**
      * {@inheritDoc}
      */
-    public function deleteAlbum(int $id, bool $deleteImages = false): void
+    public function deleteAlbum(string $id, bool $deleteImages = false): void
     {
         $album = $this->albumRepository->find($id);
 

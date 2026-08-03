@@ -40,36 +40,39 @@ $album = $albumService->createAlbum($user, 'Mes photos', new AlbumOptionsRecord(
 | Paramètre | Type | Description |
 |-----------|------|-------------|
 | `$album` | `Album` | Album cible |
-| `$imageIds` | `array<int>` | IDs des images à ajouter |
+| `$imageIds` | `array<string>` | UUIDs des images à ajouter |
 
 **Exemple :**
 ```php
-$albumService->addImagesToAlbum($album, [1, 2, 3, 4, 5]);
+$albumService->addImagesToAlbum($album, [
+    '550e8400-e29b-41d4-a716-446655440000',
+    '6ba7b810-9dad-11d1-80b4-00c04fd430c8'
+]);
 ```
 
-### `addImageToAlbum(Album $album, int $imageId, int $order = 0): void`
+### `addImageToAlbum(Album $album, string $imageId, int $order = 0): void`
 
 | Paramètre | Type | Description |
 |-----------|------|-------------|
 | `$album` | `Album` | Album cible |
-| `$imageId` | `int` | ID de l'image à ajouter |
+| `$imageId` | `string` | UUID de l'image à ajouter |
 | `$order` | `int` | Position (0 = ajout à la fin) |
 
 **Exemple :**
 ```php
-$albumService->addImageToAlbum($album, 10, 3);
+$albumService->addImageToAlbum($album, '550e8400-e29b-41d4-a716-446655440000', 3);
 ```
 
-### `removeImageFromAlbum(Album $album, int $imageId): void`
+### `removeImageFromAlbum(Album $album, string $imageId): void`
 
 | Paramètre | Type | Description |
 |-----------|------|-------------|
 | `$album` | `Album` | Album source |
-| `$imageId` | `int` | ID de l'image à retirer |
+| `$imageId` | `string` | UUID de l'image à retirer |
 
 **Exemple :**
 ```php
-$albumService->removeImageFromAlbum($album, 10);
+$albumService->removeImageFromAlbum($album, '550e8400-e29b-41d4-a716-446655440000');
 ```
 
 ### `removeAllImagesFromAlbum(Album $album): void`
@@ -83,16 +86,16 @@ $albumService->removeImageFromAlbum($album, 10);
 $albumService->removeAllImagesFromAlbum($album);
 ```
 
-### `setCoverImage(Album $album, int $imageId): void`
+### `setCoverImage(Album $album, string $imageId): void`
 
 | Paramètre | Type | Description |
 |-----------|------|-------------|
 | `$album` | `Album` | Album à mettre à jour |
-| `$imageId` | `int` | ID de l'image de couverture |
+| `$imageId` | `string` | UUID de l'image de couverture |
 
 **Exemple :**
 ```php
-$albumService->setCoverImage($album, 5);
+$albumService->setCoverImage($album, '550e8400-e29b-41d4-a716-446655440000');
 ```
 
 ### `getAlbumImages(Album $album): Collection`
@@ -135,11 +138,11 @@ $albums = $albumService->getAlbumsForModel($user);
 $album = $albumService->getAlbumBySlug('mes-photos-2024');
 ```
 
-### `updateAlbum(int $id, AlbumOptionsRecord $options): Album`
+### `updateAlbum(string $id, AlbumOptionsRecord $options): Album`
 
 | Paramètre | Type | Description |
 |-----------|------|-------------|
-| `$id` | `int` | ID de l'album |
+| `$id` | `string` | UUID de l'album |
 | `$options` | `AlbumOptionsRecord` | Nouvelles options |
 
 **Retourne :** `Album` - Album mis à jour
@@ -148,24 +151,27 @@ $album = $albumService->getAlbumBySlug('mes-photos-2024');
 
 **Exemple :**
 ```php
-$album = $albumService->updateAlbum(1, new AlbumOptionsRecord(
-    name: 'Nouveau nom',
-    is_public: BinaryChoice::NO,
-));
+$album = $albumService->updateAlbum(
+    '550e8400-e29b-41d4-a716-446655440000',
+    new AlbumOptionsRecord(
+        name: 'Nouveau nom',
+        is_public: BinaryChoice::NO,
+    )
+);
 ```
 
-### `deleteAlbum(int $id, bool $deleteImages = false): void`
+### `deleteAlbum(string $id, bool $deleteImages = false): void`
 
 | Paramètre | Type | Description |
 |-----------|------|-------------|
-| `$id` | `int` | ID de l'album |
+| `$id` | `string` | UUID de l'album |
 | `$deleteImages` | `bool` | Supprimer aussi les images |
 
 **Exceptions :** `RuntimeException` - Album non trouvé
 
 **Exemple :**
 ```php
-$albumService->deleteAlbum(1, deleteImages: true);
+$albumService->deleteAlbum('550e8400-e29b-41d4-a716-446655440000', deleteImages: true);
 ```
 
 ### `reorderAlbumImages(Album $album, array $imageIds): void`
@@ -173,11 +179,15 @@ $albumService->deleteAlbum(1, deleteImages: true);
 | Paramètre | Type | Description |
 |-----------|------|-------------|
 | `$album` | `Album` | Album à réorganiser |
-| `$imageIds` | `array<int>` | Nouvel ordre des IDs |
+| `$imageIds` | `array<string>` | Nouvel ordre des UUIDs |
 
 **Exemple :**
 ```php
-$albumService->reorderAlbumImages($album, [3, 1, 4, 2]);
+$albumService->reorderAlbumImages($album, [
+    '6ba7b810-9dad-11d1-80b4-00c04fd430c8',
+    '550e8400-e29b-41d4-a716-446655440000',
+    '6ba7b811-9dad-11d1-80b4-00c04fd430c8'
+]);
 ```
 
 ### `duplicateAlbum(Album $album, string $newName): Album`
@@ -274,16 +284,25 @@ Ajout, retrait et réorganisation des images.
 $album = $albumService->getAlbumBySlug('vacances-italie');
 
 // Ajouter plusieurs images
-$albumService->addImagesToAlbum($album, [1, 2, 3, 4, 5]);
+$albumService->addImagesToAlbum($album, [
+    '550e8400-e29b-41d4-a716-446655440000',
+    '6ba7b810-9dad-11d1-80b4-00c04fd430c8',
+    '6ba7b811-9dad-11d1-80b4-00c04fd430c8'
+]);
 
 // Ajouter une image avec une position spécifique
-$albumService->addImageToAlbum($album, 6, 2);
+$albumService->addImageToAlbum($album, '6ba7b812-9dad-11d1-80b4-00c04fd430c8', 2);
 
 // Réorganiser les images
-$albumService->reorderAlbumImages($album, [3, 1, 5, 2, 4, 6]);
+$albumService->reorderAlbumImages($album, [
+    '6ba7b811-9dad-11d1-80b4-00c04fd430c8',
+    '550e8400-e29b-41d4-a716-446655440000',
+    '6ba7b812-9dad-11d1-80b4-00c04fd430c8',
+    '6ba7b810-9dad-11d1-80b4-00c04fd430c8'
+]);
 
 // Retirer une image
-$albumService->removeImageFromAlbum($album, 4);
+$albumService->removeImageFromAlbum($album, '6ba7b810-9dad-11d1-80b4-00c04fd430c8');
 ```
 
 ### Cas 3 : Configuration de la couverture
@@ -385,6 +404,7 @@ declare(strict_types=1);
 use AndyDefer\LaravelCluster\Enums\BinaryChoice;
 use AndyDefer\LaravelImages\Records\AlbumOptionsRecord;
 use AndyDefer\LaravelImages\Services\AlbumService;
+use Illuminate\Support\Str;
 
 // 1. Créer un album
 $album = $albumService->createAlbum(
@@ -404,7 +424,14 @@ echo "Album créé : " . $album->name . "\n";
 echo "Slug : " . $album->slug->getValue() . "\n";
 
 // 2. Ajouter des images
-$imageIds = [10, 11, 12, 13, 14, 15];
+$imageIds = [
+    (string) Str::uuid(),
+    (string) Str::uuid(),
+    (string) Str::uuid(),
+    (string) Str::uuid(),
+    (string) Str::uuid(),
+    (string) Str::uuid(),
+];
 $albumService->addImagesToAlbum($album, $imageIds);
 
 // 3. Définir la couverture
@@ -444,3 +471,4 @@ foreach ($featured as $item) {
 - `AlbumOptionsRecord` - Record des options
 - `AlbumFilterRecord` - Record des filtres
 - `BinaryChoice` - Enum pour les choix binaires
+---

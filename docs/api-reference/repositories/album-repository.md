@@ -27,11 +27,11 @@ Encapsule les accès à la base de données pour l'entité `Album`. Il fournit d
 
 **Description :** Applique les filtres à la requête Eloquent. Cette méthode est appelée automatiquement par le repository parent.
 
-### `setPublic(int $id, BinaryChoice $isPublic): Album`
+### `setPublic(string $id, BinaryChoice $isPublic): Album`
 
 | Paramètre | Type | Description |
 |-----------|------|-------------|
-| `$id` | `int` | Identifiant de l'album |
+| `$id` | `string` | UUID de l'album |
 | `$isPublic` | `BinaryChoice` | Statut public (`YES` ou `NO`) |
 
 **Retourne :** `Album` - Album mis à jour
@@ -40,14 +40,14 @@ Encapsule les accès à la base de données pour l'entité `Album`. Il fournit d
 ```php
 use AndyDefer\LaravelCluster\Enums\BinaryChoice;
 
-$album = $repository->setPublic(1, BinaryChoice::YES);
+$album = $repository->setPublic('550e8400-e29b-41d4-a716-446655440000', BinaryChoice::YES);
 ```
 
-### `setFeatured(int $id, BinaryChoice $isFeatured): Album`
+### `setFeatured(string $id, BinaryChoice $isFeatured): Album`
 
 | Paramètre | Type | Description |
 |-----------|------|-------------|
-| `$id` | `int` | Identifiant de l'album |
+| `$id` | `string` | UUID de l'album |
 | `$isFeatured` | `BinaryChoice` | Statut mis en avant (`YES` ou `NO`) |
 
 **Retourne :** `Album` - Album mis à jour
@@ -56,7 +56,7 @@ $album = $repository->setPublic(1, BinaryChoice::YES);
 ```php
 use AndyDefer\LaravelCluster\Enums\BinaryChoice;
 
-$album = $repository->setFeatured(1, BinaryChoice::YES);
+$album = $repository->setFeatured('550e8400-e29b-41d4-a716-446655440000', BinaryChoice::YES);
 ```
 
 ## Filtres disponibles
@@ -64,10 +64,10 @@ $album = $repository->setFeatured(1, BinaryChoice::YES);
 | Filtre | Type | Description |
 |--------|------|-------------|
 | `albumable_type` | `string` | Type du modèle parent (polymorphique) |
-| `albumable_id` | `int` | ID du modèle parent |
+| `albumable_id` | `string` | UUID du modèle parent |
 | `is_public` | `BinaryChoice` | Statut public |
 | `is_featured` | `BinaryChoice` | Statut mis en avant |
-| `ids` | `StringTypedCollection` | Liste d'IDs spécifiques |
+| `ids` | `StringTypedCollection` | Liste d'UUIDs spécifiques |
 | `slug` | `SlugVO` | Slug exact de l'album |
 | `search` | `string` | Recherche textuelle (nom ou description) |
 
@@ -78,6 +78,8 @@ $album = $repository->setFeatured(1, BinaryChoice::YES);
 Récupère tous les albums associés à un utilisateur.
 
 ```php
+$userId = '550e8400-e29b-41d4-a716-446655440000';
+
 $filter = AlbumFilterRecord::from([
     'albumable_type' => User::class,
     'albumable_id' => $userId,
@@ -127,6 +129,8 @@ Active ou désactive la visibilité d'un album.
 ```php
 use AndyDefer\LaravelCluster\Enums\BinaryChoice;
 
+$albumId = '550e8400-e29b-41d4-a716-446655440000';
+
 // Rendre l'album public
 $album = $repository->setPublic($albumId, BinaryChoice::YES);
 
@@ -140,6 +144,8 @@ Active ou désactive la mise en avant d'un album.
 
 ```php
 use AndyDefer\LaravelCluster\Enums\BinaryChoice;
+
+$albumId = '550e8400-e29b-41d4-a716-446655440000';
 
 // Mettre en avant
 $album = $repository->setFeatured($albumId, BinaryChoice::YES);
@@ -190,7 +196,7 @@ final class AlbumService
         private readonly AlbumRepository $albumRepository,
     ) {}
 
-    public function makeAlbumPublic(int $id): Album
+    public function makeAlbumPublic(string $id): Album
     {
         return $this->albumRepository->setPublic($id, BinaryChoice::YES);
     }
@@ -234,14 +240,18 @@ use AndyDefer\LaravelImages\Repositories\AlbumRepository;
 use AndyDefer\PhpVo\ValueObjects\SlugVO;
 use AndyDefer\Repository\Records\FindByRecord;
 use AndyDefer\Repository\ValueObjects\SortColumns;
+use Illuminate\Support\Str;
 
 // 1. Créer le repository
 $repository = new AlbumRepository();
 
-// 2. Rechercher les albums publics d'un utilisateur
+// 2. Créer un UUID pour l'utilisateur
+$userId = (string) Str::uuid();
+
+// 3. Rechercher les albums publics d'un utilisateur
 $filter = AlbumFilterRecord::from([
     'albumable_type' => 'App\Models\User',
-    'albumable_id' => 1,
+    'albumable_id' => $userId,
     'is_public' => BinaryChoice::YES,
 ]);
 
@@ -257,7 +267,7 @@ foreach ($albums as $album) {
     echo $album->name . " (" . $album->slug->getValue() . ")\n";
 }
 
-// 3. Mettre à jour le statut d'un album
+// 4. Mettre à jour le statut d'un album
 $albumId = $albums->first()->id;
 
 // Rendre l'album mis en avant
@@ -266,7 +276,7 @@ $updatedAlbum = $repository->setFeatured($albumId, BinaryChoice::YES);
 // Rendre l'album public
 $updatedAlbum = $repository->setPublic($albumId, BinaryChoice::YES);
 
-// 4. Recherche par slug
+// 5. Recherche par slug
 $slug = new SlugVO('mon-album-special');
 $filter = AlbumFilterRecord::from(['slug' => $slug]);
 $findBy = new FindByRecord(filters: $filter, limit: 1);
@@ -286,3 +296,4 @@ if ($album) {
 - `Album` - Modèle Eloquent
 - `BinaryChoice` - Enum pour les choix binaires (YES/NO)
 - `FindByRecord` - Record de recherche
+---

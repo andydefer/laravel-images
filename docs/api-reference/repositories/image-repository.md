@@ -27,12 +27,12 @@ Encapsule les accès à la base de données pour l'entité `Image`. Il fournit d
 
 **Description :** Applique les filtres à la requête Eloquent. Cette méthode est appelée automatiquement par le repository parent.
 
-### `getPrimaryImageForModel(string $imageableType, int $imageableId): ?Image`
+### `getPrimaryImageForModel(string $imageableType, string $imageableId): ?Image`
 
 | Paramètre | Type | Description |
 |-----------|------|-------------|
 | `$imageableType` | `string` | Type du modèle parent (morph class) |
-| `$imageableId` | `int` | ID du modèle parent |
+| `$imageableId` | `string` | UUID du modèle parent |
 
 **Retourne :** `Image|null` - L'image principale ou `null` si aucune
 
@@ -40,7 +40,7 @@ Encapsule les accès à la base de données pour l'entité `Image`. Il fournit d
 ```php
 $primaryImage = $repository->getPrimaryImageForModel(
     User::class,
-    $userId
+    '550e8400-e29b-41d4-a716-446655440000'
 );
 ```
 
@@ -48,10 +48,10 @@ $primaryImage = $repository->getPrimaryImageForModel(
 
 | Filtre | Type | Description |
 |--------|------|-------------|
-| `id` | `int` | ID spécifique de l'image |
-| `ids` | `StringTypedCollection` | Liste d'IDs |
+| `id` | `string` | UUID spécifique de l'image |
+| `ids` | `StringTypedCollection` | Liste d'UUIDs |
 | `imageable_type` | `string` | Type du modèle parent |
-| `imageable_id` | `int` | ID du modèle parent |
+| `imageable_id` | `string` | UUID du modèle parent |
 | `type` | `ImageType` | Type d'image spécifique |
 | `types` | `ImageTypeCollection` | Liste de types |
 | `min_size` / `max_size` | `int` | Taille du fichier en bytes |
@@ -72,7 +72,7 @@ Obtient l'image principale associée à un modèle parent.
 ```php
 $primaryImage = $repository->getPrimaryImageForModel(
     'App\Models\Post',
-    $postId
+    '550e8400-e29b-41d4-a716-446655440000'
 );
 
 if ($primaryImage) {
@@ -89,7 +89,7 @@ use AndyDefer\LaravelImages\Enums\ImageType;
 
 $filter = ImageFilterRecord::from([
     'imageable_type' => 'App\Models\Product',
-    'imageable_id' => $productId,
+    'imageable_id' => '550e8400-e29b-41d4-a716-446655440000',
     'type' => ImageType::GALLERY,
 ]);
 
@@ -119,7 +119,12 @@ $images = $repository->findBy($findBy);
 Utilisation pour récupérer l'image principale pour chaque modèle d'une collection.
 
 ```php
-$userIds = [1, 2, 3, 4, 5];
+$userIds = [
+    '550e8400-e29b-41d4-a716-446655440000',
+    '6ba7b810-9dad-11d1-80b4-00c04fd430c8',
+    '6ba7b811-9dad-11d1-80b4-00c04fd430c8'
+];
+
 $primaryImages = [];
 
 foreach ($userIds as $userId) {
@@ -151,7 +156,7 @@ Récupère les images dans une plage d'ordre spécifique.
 ```php
 $filter = ImageFilterRecord::from([
     'imageable_type' => 'App\Models\Album',
-    'imageable_id' => $albumId,
+    'imageable_id' => '550e8400-e29b-41d4-a716-446655440000',
     'min_order' => 1,
     'max_order' => 10,
 ]);
@@ -192,7 +197,7 @@ final class ImageService
         private readonly ImageRepository $imageRepository,
     ) {}
 
-    public function getPrimaryImage(int $modelId): ?Image
+    public function getPrimaryImage(string $modelId): ?Image
     {
         return $this->imageRepository->getPrimaryImageForModel(
             'App\Models\Post',
@@ -240,24 +245,30 @@ use AndyDefer\LaravelImages\Records\ImageFilterRecord;
 use AndyDefer\LaravelImages\Repositories\ImageRepository;
 use AndyDefer\Repository\Records\FindByRecord;
 use AndyDefer\Repository\ValueObjects\SortColumns;
+use Illuminate\Support\Str;
 
 // 1. Créer le repository
 $repository = new ImageRepository();
 
-// 2. Récupérer l'image principale d'un utilisateur
+// 2. Créer un UUID pour l'utilisateur
+$userId = (string) Str::uuid();
+
+// 3. Récupérer l'image principale d'un utilisateur
 $primary = $repository->getPrimaryImageForModel(
     'App\Models\User',
-    42
+    $userId
 );
 
 if ($primary) {
     echo "Photo de profil : " . $primary->filename . "\n";
 }
 
-// 3. Rechercher les images d'un type spécifique
+// 4. Rechercher les images d'un type spécifique
+$productId = (string) Str::uuid();
+
 $filter = ImageFilterRecord::from([
     'imageable_type' => 'App\Models\Product',
-    'imageable_id' => 123,
+    'imageable_id' => $productId,
     'type' => ImageType::COVER,
 ]);
 
@@ -273,7 +284,7 @@ foreach ($coverImages as $image) {
     echo $image->filename . " (" . $image->extension . ")\n";
 }
 
-// 4. Rechercher des images WebP récentes
+// 5. Rechercher des images WebP récentes
 $filter = ImageFilterRecord::from([
     'extension' => ImageExtension::WEBP,
     'min_size' => 1024 * 200, // 200 KB minimum
@@ -287,7 +298,7 @@ $findBy = new FindByRecord(
 
 $webpImages = $repository->findBy($findBy);
 
-// 5. Recherche textuelle
+// 6. Recherche textuelle
 $filter = ImageFilterRecord::from([
     'search' => 'profile',
     'is_primary' => true,
@@ -296,10 +307,12 @@ $filter = ImageFilterRecord::from([
 $findBy = new FindByRecord(filters: $filter);
 $profileImages = $repository->findBy($findBy);
 
-// 6. Récupération des images d'un album dans l'ordre
+// 7. Récupération des images d'un album dans l'ordre
+$albumId = (string) Str::uuid();
+
 $filter = ImageFilterRecord::from([
     'imageable_type' => 'App\Models\Album',
-    'imageable_id' => 456,
+    'imageable_id' => $albumId,
     'min_order' => 1,
     'max_order' => 20,
 ]);
@@ -321,3 +334,4 @@ $albumImages = $repository->findBy($findBy);
 - `ImageType` - Enum des types d'images
 - `ImageExtension` - Enum des extensions
 - `FindByRecord` - Record de recherche
+---

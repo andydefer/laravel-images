@@ -12,6 +12,8 @@
 8. [Directives CLI](#8-directives-cli)
 9. [Exemples complets](#9-exemples-complets)
 10. [API Référence](#10-api-référence)
+11. [Événements automatiques](#11-événements-automatiques)
+12. [Relations inverses (Light/Dark)](#12-relations-inverses-lightdark)
 
 ---
 
@@ -77,7 +79,7 @@ Une image est un modèle Eloquent qui représente un fichier image stocké sur l
 use AndyDefer\LaravelImages\Models\Image;
 
 // Propriétés principales
-$image->id;                // ID unique
+$image->id;                // UUID unique
 $image->path;              // Chemin relatif (ImagePathVO)
 $image->filename;          // Nom du fichier
 $image->original_filename; // Nom original
@@ -89,6 +91,7 @@ $image->metadata;          // Métadonnées (ImageMetadataVO)
 $image->is_primary;        // Image principale
 $image->is_processed;      // Traitée ou non
 $image->order;             // Ordre d'affichage
+$image->inverse_image_id;  // UUID de l'image inverse (light/dark)
 ```
 
 ### 3.2 Album
@@ -98,6 +101,7 @@ Un album regroupe plusieurs images avec un ordre défini.
 ```php
 use AndyDefer\LaravelImages\Models\Album;
 
+$album->id;            // UUID unique
 $album->name;          // Nom de l'album
 $album->slug;          // Slug unique
 $album->description;   // Description
@@ -244,8 +248,8 @@ $avatars = $imageService->getImagesForModel($user, ImageType::AVATAR);
 // Image principale
 $primary = $imageService->getPrimaryImage($user);
 
-// Une image par ID
-$image = $imageService->findImage(42);
+// Une image par UUID
+$image = $imageService->findImage('550e8400-e29b-41d4-a716-446655440000');
 
 // Images mises à jour récemment
 $recent = $imageService->getImagesUpdatedAfter(
@@ -271,7 +275,7 @@ $image = $imageService->update(
 $imageService->setAsPrimary($imageId, $post);
 
 // Réorganiser les images
-$imageService->reorder([3, 1, 4, 2]);
+$imageService->reorder(['uuid1', 'uuid2', 'uuid3']);
 ```
 
 ### 4.5 Suppression
@@ -281,7 +285,7 @@ $imageService->reorder([3, 1, 4, 2]);
 $imageService->delete($imageId, deleteFile: true);
 
 // Supprimer plusieurs images
-$imageService->deleteMultiple([1, 2, 3], deleteFile: true);
+$imageService->deleteMultiple(['uuid1', 'uuid2', 'uuid3'], deleteFile: true);
 
 // Supprimer toutes les images d'un modèle
 $imageService->deleteAllForModel($post, deleteFile: true);
@@ -327,13 +331,13 @@ $album = $albumService->createAlbum(
 
 ```php
 // Ajouter des images à un album
-$albumService->addImagesToAlbum($album, [1, 2, 3, 4, 5]);
+$albumService->addImagesToAlbum($album, ['uuid1', 'uuid2', 'uuid3', 'uuid4', 'uuid5']);
 
 // Ajouter une image avec une position spécifique
 $albumService->addImageToAlbum($album, $imageId, $order = 3);
 
 // Réorganiser les images
-$albumService->reorderAlbumImages($album, [3, 1, 4, 2, 5]);
+$albumService->reorderAlbumImages($album, ['uuid3', 'uuid1', 'uuid4', 'uuid2', 'uuid5']);
 
 // Retirer une image
 $albumService->removeImageFromAlbum($album, $imageId);
@@ -885,20 +889,21 @@ class ImageExportService
 
 | Méthode | Description |
 |---------|-------------|
-| `findImage(int $id): ?Image` | Trouve une image par ID |
+| `findImage(string $id): ?Image` | Trouve une image par UUID |
 | `upload(...): Image` | Upload une image |
 | `uploadMultiple(...): Collection` | Upload plusieurs images |
-| `update(ImageRecord $record, int $id): Image` | Met à jour une image |
-| `delete(int $id, bool $deleteFile): void` | Supprime une image |
-| `deleteMultiple(array $ids, bool $deleteFile): void` | Supprime plusieurs images |
+| `update(ImageRecord $record, string $id): Image` | Met à jour une image |
+| `delete(string $id, bool $deleteFile): void` | Supprime une image |
+| `deleteMultiple(array<string> $ids, bool $deleteFile): void` | Supprime plusieurs images |
 | `deleteAllForModel(Model $model, bool $deleteFile): void` | Supprime toutes les images d'un modèle |
 | `getImagesForModel(Model $model, ?ImageType $type): Collection` | Récupère les images d'un modèle |
 | `getPrimaryImage(Model $model): ?Image` | Récupère l'image principale |
-| `setAsPrimary(int $id, Model $model): void` | Définit une image comme principale |
+| `setAsPrimary(string $id, Model $model): void` | Définit une image comme principale |
 | `countImages(Model $model, ?ImageType $type): int` | Compte les images |
 | `getImagesUpdatedAfter(DateTimeVO $date): Collection` | Images mises à jour après une date |
-| `reorder(array $ids): void` | Réorganise les images |
-| `getThumbnailUrl(int $imageId, string $size): string` | URL de la miniature |
+| `reorder(array<string> $ids): void` | Réorganise les images |
+| `getThumbnailUrl(string $imageId, string $size): string` | URL de la miniature |
+| `syncInverseRelation(Image $image): void` | Synchronise la relation inverse (light/dark) |
 | `getImageProcessor(): ImageProcessorInterface` | Retourne le processeur |
 | `getStorage(): ImageStorageInterface` | Retourne le stockage |
 
@@ -907,17 +912,17 @@ class ImageExportService
 | Méthode | Description |
 |---------|-------------|
 | `createAlbum(...): Album` | Crée un album |
-| `addImagesToAlbum(Album $album, array $imageIds): void` | Ajoute des images |
-| `addImageToAlbum(Album $album, int $imageId, int $order): void` | Ajoute une image |
-| `removeImageFromAlbum(Album $album, int $imageId): void` | Retire une image |
+| `addImagesToAlbum(Album $album, array<string> $imageIds): void` | Ajoute des images |
+| `addImageToAlbum(Album $album, string $imageId, int $order): void` | Ajoute une image |
+| `removeImageFromAlbum(Album $album, string $imageId): void` | Retire une image |
 | `removeAllImagesFromAlbum(Album $album): void` | Vide un album |
-| `setCoverImage(Album $album, int $imageId): void` | Définit la couverture |
+| `setCoverImage(Album $album, string $imageId): void` | Définit la couverture |
 | `getAlbumImages(Album $album): Collection` | Images d'un album |
 | `getAlbumsForModel(Model $model, bool $onlyPublic): Collection` | Albums d'un modèle |
 | `getAlbumBySlug(string|SlugVO $slug): ?Album` | Album par slug |
-| `updateAlbum(int $id, AlbumOptionsRecord $options): Album` | Met à jour un album |
-| `deleteAlbum(int $id, bool $deleteImages): void` | Supprime un album |
-| `reorderAlbumImages(Album $album, array $imageIds): void` | Réorganise les images |
+| `updateAlbum(string $id, AlbumOptionsRecord $options): Album` | Met à jour un album |
+| `deleteAlbum(string $id, bool $deleteImages): void` | Supprime un album |
+| `reorderAlbumImages(Album $album, array<string> $imageIds): void` | Réorganise les images |
 | `duplicateAlbum(Album $album, string $newName): Album` | Duplique un album |
 | `countAlbumImages(Album $album): int` | Compte les images |
 | `isAlbumEmpty(Album $album): bool` | Vérifie si l'album est vide |
@@ -947,6 +952,161 @@ class ImageExportService
 
 ---
 
+## 11. Événements automatiques
+
+Le package utilise des **observers Eloquent** pour automatiser certaines opérations critiques sans intervention manuelle.
+
+### 11.1 ImageObserver
+
+L'`ImageObserver` gère automatiquement les relations inverses entre les variantes d'images (claires/sombres) et maintient l'intégrité référentielle.
+
+| Événement | Action automatique | Description |
+|-----------|-------------------|-------------|
+| `created` | `syncInverseRelation()` | Lorsqu'une nouvelle image est créée, le système détecte automatiquement si c'est une variante `-light` ou `-dark` et la lie à son homologue si elle existe dans le même contexte (même modèle parent, même type). |
+| `updated` | `syncInverseRelation()` | Lorsque le nom de fichier d'une image est modifié, la relation inverse est réévaluée pour maintenir la cohérence. |
+| `deleted` | `inverse_image_id = null` | Lorsqu'une image est supprimée, toutes les images qui la référencent comme `inverse_image_id` voient cette référence automatiquement mise à `null` pour éviter les orphelins. |
+
+**Exemple concret :**
+
+```php
+// Upload de deux images variantes
+$darkFile = UploadedFile::fake()->image('banner-dark.jpg');
+$lightFile = UploadedFile::fake()->image('banner-light.jpg');
+
+$darkImage = $imageService->upload($darkFile, $page, null, ImageType::BANNER);
+$lightImage = $imageService->upload($lightFile, $page, null, ImageType::BANNER);
+
+// L'ImageObserver a automatiquement lié les deux images
+$darkImage->refresh();
+$lightImage->refresh();
+
+// Les relations inverses sont automatiquement synchronisées
+echo $darkImage->inverse_image_id; // UUID de l'image light
+echo $lightImage->inverse_image_id; // UUID de l'image dark
+```
+
+### 11.2 AlbumObserver
+
+L'`AlbumObserver` maintient l'intégrité des relations entre albums et images.
+
+| Événement | Action automatique | Description |
+|-----------|-------------------|-------------|
+| `deleting` | `images()->detach()` | Avant la suppression (soft delete) d'un album, toutes les relations avec ses images sont automatiquement détachées pour éviter les enregistrements orphelins dans la table pivot. |
+| `forceDeleted` | `images()->detach()` | Lors de la suppression définitive d'un album, les relations sont également nettoyées pour maintenir la cohérence. |
+
+**Exemple concret :**
+
+```php
+// Création d'un album avec des images
+$album = $albumService->createAlbum($user, 'Mes photos');
+$albumService->addImagesToAlbum($album, ['uuid1', 'uuid2', 'uuid3']);
+
+// Suppression de l'album
+$album->delete();
+
+// L'AlbumObserver a automatiquement détaché toutes les images
+// Les images 1, 2, 3 existent toujours mais ne sont plus liées à l'album
+```
+
+---
+
+## 12. Relations inverses (Light/Dark)
+
+### 12.1 Principe
+
+Le package supporte nativement la gestion des **paires d'images inverses** (light/dark) grâce à la colonne `inverse_image_id` dans la table `images`. Cette fonctionnalité est particulièrement utile pour :
+
+- **Bannières thématiques** : Afficher une version claire ou sombre selon le thème de l'interface
+- **Logos adaptatifs** : Proposer un logo clair sur fond sombre et vice-versa
+- **Icônes contextuelles** : Alterner entre variantes selon le contexte d'affichage
+
+### 12.2 Comment ça fonctionne
+
+La détection des paires se base sur la convention de nommage des fichiers :
+
+| Variante | Pattern | Exemple |
+|----------|---------|---------|
+| Dark | `*-dark.*` | `logo-dark.png`, `banner-dark.jpg` |
+| Light | `*-light.*` | `logo-light.png`, `banner-light.jpg` |
+
+### 12.3 Synchronisation automatique
+
+La synchronisation est entièrement **automatique** via l'`ImageObserver` :
+
+1. **Création** : Lorsque vous uploadez une image avec un nom contenant `-light` ou `-dark`, le système recherche automatiquement son homologue dans le même contexte (même `imageable_type`, `imageable_id` et `type`).
+
+2. **Liaison** : Si l'homologue existe, les deux images sont liées bidirectionnellement via `inverse_image_id`.
+
+3. **Nettoyage** : Si l'homologue est supprimé, la référence est automatiquement mise à `null`.
+
+### 12.4 Utilisation
+
+```php
+// Upload des deux variantes (l'ordre n'a pas d'importance)
+$darkFile = UploadedFile::fake()->image('hero-dark.jpg');
+$lightFile = UploadedFile::fake()->image('hero-light.jpg');
+
+// L'Observer lie automatiquement les deux images
+$darkImage = $imageService->upload($darkFile, $page, null, ImageType::BANNER);
+$lightImage = $imageService->upload($lightFile, $page, null, ImageType::BANNER);
+
+// La liaison est automatique
+$darkImage->refresh();
+echo $darkImage->inverse_image_id; // UUID de l'image light
+
+// Récupérer l'image inverse via la relation Eloquent
+$inverse = $darkImage->inverseImage;
+echo $inverse->filename; // 'hero-light.jpg'
+```
+
+### 12.5 Synchronisation manuelle
+
+Bien que la synchronisation soit automatique, vous pouvez également la déclencher manuellement :
+
+```php
+use AndyDefer\LaravelImages\Models\Image;
+
+$image = Image::find('550e8400-e29b-41d4-a716-446655440000');
+$imageService->syncInverseRelation($image);
+```
+
+### 12.6 Cas d'usage avancé
+
+```php
+// Récupérer la bonne variante selon le thème de l'utilisateur
+function getThemeImage(Image $image, string $theme): ?Image
+{
+    if ($theme === 'dark' && $image->original_filename) {
+        // Si l'image actuelle est light, chercher sa version dark
+        return $image->inverseImage ?? $image;
+    }
+    
+    if ($theme === 'light' && $image->original_filename) {
+        // Si l'image actuelle est dark, chercher sa version light
+        return $image->inverseImage ?? $image;
+    }
+    
+    return $image;
+}
+
+// Dans un template Blade
+@php
+    $banner = $page->getPrimaryImage();
+    $displayedBanner = getThemeImage($banner, auth()->user()->theme);
+@endphp
+
+<img src="{{ $displayedBanner->full_url }}" alt="Bannière" />
+```
+
+### 12.7 Limitations
+
+- La détection se base uniquement sur le nom de fichier original (`original_filename`)
+- Les deux images doivent être dans le **même contexte** (même `imageable_type`, `imageable_id`, `type`)
+- La relation est stockée via une colonne `inverse_image_id` de type UUID dans la table `images`
+
+---
+
 ## Licence
 
 MIT © [Andy Defer](https://github.com/andydefer)
+```

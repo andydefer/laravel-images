@@ -19,7 +19,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Str;
 
 /**
  * Album model for grouping images.
@@ -82,18 +81,6 @@ final class Album extends Model
     protected static function newFactory(): AlbumFactory
     {
         return AlbumFactory::new();
-    }
-
-    /**
-     * Boot the model and register event listeners.
-     */
-    protected static function booted(): void
-    {
-        self::creating(function (Album $album): void {
-            if (empty($album->id)) {
-                $album->id = (string) Str::uuid();
-            }
-        });
     }
 
     // ============================================================

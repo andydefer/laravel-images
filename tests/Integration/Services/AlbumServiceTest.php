@@ -13,6 +13,7 @@ use AndyDefer\LaravelImages\Tests\IntegrationTestCase;
 use AndyDefer\LaravelImages\ValueObjects\ImageMetadataVO;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Str;
 
 final class AlbumServiceTest extends IntegrationTestCase
 {
@@ -39,7 +40,7 @@ final class AlbumServiceTest extends IntegrationTestCase
         ]);
     }
 
-    private function createTestImage(): int
+    private function createTestImage(): string
     {
         $file = UploadedFile::fake()->image('test.jpg', 800, 600);
         $image = $this->imageService->upload($file, $this->user);
@@ -293,11 +294,13 @@ final class AlbumServiceTest extends IntegrationTestCase
 
     public function test_update_album_throws_exception_when_not_found(): void
     {
+        $nonExistentId = (string) Str::uuid();
+
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('Album not found: 99999');
+        $this->expectExceptionMessage("Album not found: {$nonExistentId}");
 
         $options = AlbumOptionsRecord::from(['name' => 'New Name']);
-        $this->albumService->updateAlbum(99999, $options);
+        $this->albumService->updateAlbum($nonExistentId, $options);
     }
 
     // ============================================================

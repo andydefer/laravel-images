@@ -6,6 +6,7 @@ namespace AndyDefer\LaravelImages\Observers;
 
 use AndyDefer\LaravelImages\Models\Image;
 use AndyDefer\LaravelImages\Services\ImageService;
+use Illuminate\Support\Str;
 
 /**
  * Observer responsible for maintaining image relationships and integrity.
@@ -19,6 +20,16 @@ final class ImageObserver
     public function __construct(
         private readonly ImageService $imageService,
     ) {}
+
+    /**
+     * Generates a UUID for the image before creation if not already set.
+     */
+    public function creating(Image $image): void
+    {
+        if (empty($image->id)) {
+            $image->id = (string) Str::uuid();
+        }
+    }
 
     /**
      * Synchronizes inverse relationships when a new image is created.

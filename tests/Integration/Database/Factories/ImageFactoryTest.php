@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace AndyDefer\LaravelImages\Tests\Integration\Database\Factories;
 
 use AndyDefer\LaravelImages\Database\Factories\ImageFactory;
+use AndyDefer\LaravelImages\Enums\ImageExtension;
 use AndyDefer\LaravelImages\Enums\ImageType;
 use AndyDefer\LaravelImages\Models\Album;
 use AndyDefer\LaravelImages\Models\Image;
@@ -541,7 +542,7 @@ final class ImageFactoryTest extends IntegrationTestCase
 
         // Assert: Verify the path follows the expected pattern
         $this->assertMatchesRegularExpression(
-            '/^images\/avatar\/\d{4}\/\d{2}\/\d{2}\/[a-f0-9-]+\.(jpg|png|webp|gif)$/',
+            '/^images\/avatar\/\d{4}\/\d{2}\/\d{2}\/[a-f0-9-]+\.('.implode('|', array_map('preg_quote', ImageExtension::values())).')$/',
             (string) $image->path
         );
     }

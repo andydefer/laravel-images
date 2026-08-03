@@ -16,6 +16,7 @@ use AndyDefer\LaravelImages\Tests\IntegrationTestCase;
 use AndyDefer\Repository\Records\FindByRecord;
 use AndyDefer\Repository\ValueObjects\SortColumns;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
+use Illuminate\Support\Str;
 
 final class ImageRepositoryTest extends IntegrationTestCase
 {
@@ -59,8 +60,8 @@ final class ImageRepositoryTest extends IntegrationTestCase
         $image3 = $this->createImage(['filename' => 'image3.jpg']);
 
         $ids = new StringTypedCollection;
-        $ids->add((string) $image1->id);
-        $ids->add((string) $image3->id);
+        $ids->add($image1->id);
+        $ids->add($image3->id);
 
         $filter = new ImageFilterRecord(ids: $ids);
         $findBy = new FindByRecord(filters: $filter);
@@ -111,10 +112,13 @@ final class ImageRepositoryTest extends IntegrationTestCase
 
     public function test_filter_by_imageable_id(): void
     {
-        $this->createImage(['imageable_type' => 'App\Models\User', 'imageable_id' => 1, 'filename' => 'user1.jpg']);
-        $this->createImage(['imageable_type' => 'App\Models\User', 'imageable_id' => 2, 'filename' => 'user2.jpg']);
+        $user1Id = (string) Str::uuid();
+        $user2Id = (string) Str::uuid();
 
-        $filter = new ImageFilterRecord(imageable_id: 1);
+        $this->createImage(['imageable_type' => 'App\Models\User', 'imageable_id' => $user1Id, 'filename' => 'user1.jpg']);
+        $this->createImage(['imageable_type' => 'App\Models\User', 'imageable_id' => $user2Id, 'filename' => 'user2.jpg']);
+
+        $filter = new ImageFilterRecord(imageable_id: $user1Id);
         $findBy = new FindByRecord(filters: $filter);
 
         $results = $this->repository->findBy($findBy);
@@ -382,7 +386,7 @@ final class ImageRepositoryTest extends IntegrationTestCase
     public function test_get_primary_image_for_model(): void
     {
         $imageableType = 'App\Models\User';
-        $imageableId = 1;
+        $imageableId = (string) Str::uuid();
 
         $this->createImage([
             'imageable_type' => $imageableType,
@@ -407,7 +411,7 @@ final class ImageRepositoryTest extends IntegrationTestCase
     public function test_get_primary_image_for_model_returns_null_when_none(): void
     {
         $imageableType = 'App\Models\User';
-        $imageableId = 1;
+        $imageableId = (string) Str::uuid();
 
         $this->createImage([
             'imageable_type' => $imageableType,
@@ -427,10 +431,12 @@ final class ImageRepositoryTest extends IntegrationTestCase
 
     public function test_filter_with_multiple_conditions(): void
     {
+        $imageableId = (string) Str::uuid();
+
         $this->createImage([
             'filename' => 'user-avatar.jpg',
             'imageable_type' => 'App\Models\User',
-            'imageable_id' => 1,
+            'imageable_id' => $imageableId,
             'type' => ImageType::AVATAR,
             'size' => 500,
         ]);
@@ -438,14 +444,14 @@ final class ImageRepositoryTest extends IntegrationTestCase
         $this->createImage([
             'filename' => 'user-cover.jpg',
             'imageable_type' => 'App\Models\User',
-            'imageable_id' => 1,
+            'imageable_id' => $imageableId,
             'type' => ImageType::COVER,
             'size' => 1000,
         ]);
 
         $filter = new ImageFilterRecord(
             imageable_type: 'App\Models\User',
-            imageable_id: 1,
+            imageable_id: $imageableId,
             type: ImageType::AVATAR,
         );
 
@@ -458,16 +464,18 @@ final class ImageRepositoryTest extends IntegrationTestCase
 
     public function test_filter_with_is_primary_and_type(): void
     {
+        $imageableId = (string) Str::uuid();
+
         $this->createImage([
             'imageable_type' => 'App\Models\User',
-            'imageable_id' => 1,
+            'imageable_id' => $imageableId,
             'type' => ImageType::AVATAR,
             'is_primary' => true,
             'filename' => 'primary_avatar.jpg',
         ]);
         $this->createImage([
             'imageable_type' => 'App\Models\User',
-            'imageable_id' => 1,
+            'imageable_id' => $imageableId,
             'type' => ImageType::COVER,
             'is_primary' => true,
             'filename' => 'primary_cover.jpg',
@@ -475,7 +483,7 @@ final class ImageRepositoryTest extends IntegrationTestCase
 
         $filter = new ImageFilterRecord(
             imageable_type: 'App\Models\User',
-            imageable_id: 1,
+            imageable_id: $imageableId,
             type: ImageType::AVATAR,
             is_primary: true,
         );
@@ -538,15 +546,16 @@ final class ImageRepositoryTest extends IntegrationTestCase
     private function createImage(array $attributes = []): Image
     {
         $defaults = [
-            'path' => 'images/test-'.uniqid().'.jpg',
-            'filename' => 'test-'.uniqid().'.jpg',
+            'id' => (string) Str::uuid(),
+            'path' => 'images/test-'.Str::uuid().'.jpg',
+            'filename' => 'test-'.Str::uuid().'.jpg',
             'original_filename' => 'original-test.jpg',
             'extension' => ImageExtension::JPG->value,
             'mime_type' => ImageMimeType::JPEG->value,
             'size' => 1024,
             'type' => ImageType::GALLERY->value,
             'imageable_type' => 'App\Models\User',
-            'imageable_id' => 1,
+            'imageable_id' => (string) Str::uuid(),
             'order' => 0,
             'is_primary' => false,
             'is_processed' => true,

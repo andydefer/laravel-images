@@ -34,7 +34,7 @@ interface AlbumServiceInterface
      * Images are added in the order they appear in the array.
      *
      * @param  Album  $album  The target album
-     * @param  array<int>  $imageIds  Array of image IDs to add
+     * @param  array<string>  $imageIds  Array of image UUIDs to add
      */
     public function addImagesToAlbum(Album $album, array $imageIds): void;
 
@@ -42,18 +42,18 @@ interface AlbumServiceInterface
      * Add a single image to an album.
      *
      * @param  Album  $album  The target album
-     * @param  int  $imageId  The image ID to add
+     * @param  string  $imageId  The image UUID to add
      * @param  int  $order  The position order (0 = auto-assign at the end)
      */
-    public function addImageToAlbum(Album $album, int $imageId, int $order = 0): void;
+    public function addImageToAlbum(Album $album, string $imageId, int $order = 0): void;
 
     /**
      * Remove an image from an album.
      *
      * @param  Album  $album  The album
-     * @param  int  $imageId  The image ID to remove
+     * @param  string  $imageId  The image UUID to remove
      */
-    public function removeImageFromAlbum(Album $album, int $imageId): void;
+    public function removeImageFromAlbum(Album $album, string $imageId): void;
 
     /**
      * Remove all images from an album.
@@ -66,9 +66,9 @@ interface AlbumServiceInterface
      * Set the cover image for an album.
      *
      * @param  Album  $album  The album
-     * @param  int  $imageId  The image ID to set as cover
+     * @param  string  $imageId  The image UUID to set as cover
      */
-    public function setCoverImage(Album $album, int $imageId): void;
+    public function setCoverImage(Album $album, string $imageId): void;
 
     /**
      * Get all images in an album.
@@ -98,30 +98,30 @@ interface AlbumServiceInterface
     /**
      * Update an existing album.
      *
-     * @param  int  $id  The album ID to update
+     * @param  string  $id  The album UUID to update
      * @param  AlbumOptionsRecord  $options  The updated options
      * @return Album The updated album
      *
      * @throws \RuntimeException If album not found
      */
-    public function updateAlbum(int $id, AlbumOptionsRecord $options): Album;
+    public function updateAlbum(string $id, AlbumOptionsRecord $options): Album;
 
     /**
      * Delete an album.
      *
-     * @param  int  $id  The album ID to delete
+     * @param  string  $id  The album UUID to delete
      * @param  bool  $deleteImages  Whether to also delete associated images
      *
      * @throws \RuntimeException If album not found
      */
-    public function deleteAlbum(int $id, bool $deleteImages = false): void;
+    public function deleteAlbum(string $id, bool $deleteImages = false): void;
 
     /**
      * Reorder images within an album.
      * The order of IDs in the array determines the new order.
      *
      * @param  Album  $album  The album
-     * @param  array<int>  $imageIds  Array of image IDs in the desired order
+     * @param  array<string>  $imageIds  Array of image UUIDs in the desired order
      */
     public function reorderAlbumImages(Album $album, array $imageIds): void;
 

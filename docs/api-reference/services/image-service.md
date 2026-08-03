@@ -20,17 +20,17 @@ Point d'entrée unique pour toutes les opérations liées aux images. Coordonne 
 
 ## API / Méthodes publiques
 
-### `findImage(int $id): ?Image`
+### `findImage(string $id): ?Image`
 
 | Paramètre | Type | Description |
 |-----------|------|-------------|
-| `$id` | `int` | Identifiant unique de l'image |
+| `$id` | `string` | UUID de l'image |
 
 **Retourne :** `?Image` - L'instance de l'image trouvée, ou `null` si inexistante
 
 **Exemple :**
 ```php
-$image = $imageService->findImage(42);
+$image = $imageService->findImage('550e8400-e29b-41d4-a716-446655440000');
 if ($image !== null) {
     echo $image->original_filename;
 }
@@ -104,12 +104,12 @@ foreach ($images as $image) {
 
 ---
 
-### `update(ImageRecord $record, int $id): Image`
+### `update(ImageRecord $record, string $id): Image`
 
 | Paramètre | Type | Description |
 |-----------|------|-------------|
 | `$record` | `ImageRecord` | Enregistrement contenant les données de mise à jour |
-| `$id` | `int` | Identifiant de l'image à mettre à jour |
+| `$id` | `string` | UUID de l'image à mettre à jour |
 
 **Retourne :** `Image` - L'instance de l'image mise à jour
 
@@ -122,24 +122,24 @@ $record = ImageRecord::from([
     'order' => 1,
 ]);
 
-$updatedImage = $imageService->update($record, 42);
+$updatedImage = $imageService->update($record, '550e8400-e29b-41d4-a716-446655440000');
 ```
 
 ---
 
-### `delete(int $id, bool $deleteFile = true): void`
+### `delete(string $id, bool $deleteFile = true): void`
 
 | Paramètre | Type | Description |
 |-----------|------|-------------|
-| `$id` | `int` | Identifiant de l'image |
+| `$id` | `string` | UUID de l'image |
 | `$deleteFile` | `bool` | Supprimer également le fichier physique (défaut: `true`) |
 
 **Exceptions :** `RuntimeException` - Image non trouvée
 
 **Exemple :**
 ```php
-$imageService->delete(42); // Supprime l'image et le fichier
-$imageService->delete(42, false); // Supprime uniquement l'enregistrement
+$imageService->delete('550e8400-e29b-41d4-a716-446655440000'); // Supprime l'image et le fichier
+$imageService->delete('550e8400-e29b-41d4-a716-446655440000', false); // Supprime uniquement l'enregistrement
 ```
 
 ---
@@ -148,12 +148,15 @@ $imageService->delete(42, false); // Supprime uniquement l'enregistrement
 
 | Paramètre | Type | Description |
 |-----------|------|-------------|
-| `$ids` | `array` | Tableau d'identifiants |
+| `$ids` | `array<string>` | Tableau d'UUIDs |
 | `$deleteFile` | `bool` | Supprimer les fichiers physiques |
 
 **Exemple :**
 ```php
-$imageService->deleteMultiple([42, 43, 44]);
+$imageService->deleteMultiple([
+    '550e8400-e29b-41d4-a716-446655440000',
+    '6ba7b810-9dad-11d1-80b4-00c04fd430c8'
+]);
 ```
 
 ---
@@ -207,16 +210,16 @@ if ($primary !== null) {
 
 ---
 
-### `setAsPrimary(int $id, Model $model): void`
+### `setAsPrimary(string $id, Model $model): void`
 
 | Paramètre | Type | Description |
 |-----------|------|-------------|
-| `$id` | `int` | Identifiant de l'image à définir comme principale |
+| `$id` | `string` | UUID de l'image à définir comme principale |
 | `$model` | `Model` | Modèle parent |
 
 **Exemple :**
 ```php
-$imageService->setAsPrimary(42, $user);
+$imageService->setAsPrimary('550e8400-e29b-41d4-a716-446655440000', $user);
 ```
 
 ---
@@ -257,20 +260,23 @@ $recentImages = $imageService->getImagesUpdatedAfter($date);
 
 | Paramètre | Type | Description |
 |-----------|------|-------------|
-| `$ids` | `array` | Tableau d'identifiants dans le nouvel ordre |
+| `$ids` | `array<string>` | Tableau d'UUIDs dans le nouvel ordre |
 
 **Exemple :**
 ```php
-$imageService->reorder([42, 43, 44]); // 42 devient order=1, 43=2, 44=3
+$imageService->reorder([
+    '550e8400-e29b-41d4-a716-446655440000',
+    '6ba7b810-9dad-11d1-80b4-00c04fd430c8'
+]);
 ```
 
 ---
 
-### `getThumbnailUrl(int $imageId, string $size = 'small'): string`
+### `getThumbnailUrl(string $imageId, string $size = 'small'): string`
 
 | Paramètre | Type | Description |
 |-----------|------|-------------|
-| `$imageId` | `int` | Identifiant de l'image |
+| `$imageId` | `string` | UUID de l'image |
 | `$size` | `string` | Taille de la vignette ('small', 'medium', 'large') |
 
 **Retourne :** `string` - URL publique de la vignette
@@ -279,7 +285,7 @@ $imageService->reorder([42, 43, 44]); // 42 devient order=1, 43=2, 44=3
 
 **Exemple :**
 ```php
-$url = $imageService->getThumbnailUrl(42, 'large');
+$url = $imageService->getThumbnailUrl('550e8400-e29b-41d4-a716-446655440000', 'large');
 echo $url; // https://example.com/storage/.../image_large.jpg
 ```
 
@@ -330,7 +336,7 @@ $image = $imageService->upload(
     options: $options
 );
 
-echo "Image uploadée avec l'ID : " . $image->id;
+echo "Image uploadée avec l'UUID : " . $image->id;
 echo "URL de la vignette : " . $imageService->getThumbnailUrl($image->id);
 ```
 
@@ -381,8 +387,8 @@ $lightImage = $imageService->upload($lightFile, $page, null, ImageType::BANNER);
 $darkImage->refresh();
 $lightImage->refresh();
 
-echo "Image dark liée à : " . $darkImage->inverse_image_id; // ID de l'image light
-echo "Image light liée à : " . $lightImage->inverse_image_id; // ID de l'image dark
+echo "Image dark liée à : " . $darkImage->inverse_image_id; // UUID de l'image light
+echo "Image light liée à : " . $lightImage->inverse_image_id; // UUID de l'image dark
 ```
 
 ### Cas 4 : Nettoyage complet des images d'un utilisateur
@@ -470,6 +476,7 @@ use AndyDefer\LaravelImages\Enums\ImageType;
 use AndyDefer\LaravelImages\Records\ImageOptionsRecord;
 use AndyDefer\LaravelImages\Services\ImageService;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Str;
 
 class UserProfileController
 {
@@ -559,3 +566,4 @@ class UserProfileController
 - `ImageObserver` - Documentation sur la synchronisation automatique
 - `ImageOptionsRecord` - Options de configuration pour l'upload
 - `ImageProcessorInterface` - Interface pour le traitement d'images
+---

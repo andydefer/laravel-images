@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace AndyDefer\LaravelImages\Database\Factories;
 
+use AndyDefer\LaravelImages\Enums\ImageExtension;
 use AndyDefer\LaravelImages\Enums\ImageType;
 use AndyDefer\LaravelImages\Models\Image;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -39,7 +40,7 @@ final class ImageFactory extends Factory
      */
     public function definition(): array
     {
-        $extension = $this->faker->randomElement(['jpg', 'png', 'webp', 'gif']);
+        $extension = $this->faker->randomElement(ImageExtension::values());
         $filename = $this->faker->uuid().'.'.$extension;
 
         return [

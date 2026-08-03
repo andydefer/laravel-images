@@ -17,7 +17,6 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Str;
 
 /**
  * Image model representing uploaded images with polymorphic relations.
@@ -106,18 +105,6 @@ final class Image extends Model
     protected static function newFactory(): ImageFactory
     {
         return ImageFactory::new();
-    }
-
-    /**
-     * Boot the model and register event listeners.
-     */
-    protected static function booted(): void
-    {
-        self::creating(function (Image $image): void {
-            if (empty($image->id)) {
-                $image->id = (string) Str::uuid();
-            }
-        });
     }
 
     // ============================================================

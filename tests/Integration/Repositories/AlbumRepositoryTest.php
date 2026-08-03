@@ -13,6 +13,7 @@ use AndyDefer\LaravelImages\Tests\IntegrationTestCase;
 use AndyDefer\Repository\Records\FindByRecord;
 use AndyDefer\Repository\ValueObjects\SortColumns;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
+use Illuminate\Support\Str;
 
 final class AlbumRepositoryTest extends IntegrationTestCase
 {
@@ -32,8 +33,11 @@ final class AlbumRepositoryTest extends IntegrationTestCase
 
     public function test_filter_by_albumable_type(): void
     {
-        $this->createAlbum(['albumable_type' => 'App\Models\User', 'albumable_id' => 1, 'name' => 'User Album']);
-        $this->createAlbum(['albumable_type' => 'App\Models\Post', 'albumable_id' => 1, 'name' => 'Post Album']);
+        $user1Id = (string) Str::uuid();
+        $post1Id = (string) Str::uuid();
+
+        $this->createAlbum(['albumable_type' => 'App\Models\User', 'albumable_id' => $user1Id, 'name' => 'User Album']);
+        $this->createAlbum(['albumable_type' => 'App\Models\Post', 'albumable_id' => $post1Id, 'name' => 'Post Album']);
 
         $filter = new AlbumFilterRecord(albumable_type: 'App\Models\User');
         $findBy = new FindByRecord(filters: $filter);
@@ -50,10 +54,13 @@ final class AlbumRepositoryTest extends IntegrationTestCase
 
     public function test_filter_by_albumable_id(): void
     {
-        $this->createAlbum(['albumable_type' => 'App\Models\User', 'albumable_id' => 1, 'name' => 'User 1 Album']);
-        $this->createAlbum(['albumable_type' => 'App\Models\User', 'albumable_id' => 2, 'name' => 'User 2 Album']);
+        $user1Id = (string) Str::uuid();
+        $user2Id = (string) Str::uuid();
 
-        $filter = new AlbumFilterRecord(albumable_id: 1);
+        $this->createAlbum(['albumable_type' => 'App\Models\User', 'albumable_id' => $user1Id, 'name' => 'User 1 Album']);
+        $this->createAlbum(['albumable_type' => 'App\Models\User', 'albumable_id' => $user2Id, 'name' => 'User 2 Album']);
+
+        $filter = new AlbumFilterRecord(albumable_id: $user1Id);
         $findBy = new FindByRecord(filters: $filter);
 
         $results = $this->repository->findBy($findBy);
@@ -109,8 +116,8 @@ final class AlbumRepositoryTest extends IntegrationTestCase
         $album3 = $this->createAlbum(['name' => 'Album 3']);
 
         $ids = new StringTypedCollection;
-        $ids->add((string) $album1->id);
-        $ids->add((string) $album3->id);
+        $ids->add($album1->id);
+        $ids->add($album3->id);
 
         $filter = new AlbumFilterRecord(ids: $ids);
         $findBy = new FindByRecord(filters: $filter);
@@ -188,30 +195,32 @@ final class AlbumRepositoryTest extends IntegrationTestCase
 
     public function test_filter_with_multiple_conditions(): void
     {
+        $userId = (string) Str::uuid();
+
         $this->createAlbum([
             'name' => 'Public User Album',
             'albumable_type' => 'App\Models\User',
-            'albumable_id' => 1,
+            'albumable_id' => $userId,
             'is_public' => BinaryChoice::YES,
         ]);
 
         $this->createAlbum([
             'name' => 'Private User Album',
             'albumable_type' => 'App\Models\User',
-            'albumable_id' => 1,
+            'albumable_id' => $userId,
             'is_public' => BinaryChoice::NO,
         ]);
 
         $this->createAlbum([
             'name' => 'Public Post Album',
             'albumable_type' => 'App\Models\Post',
-            'albumable_id' => 1,
+            'albumable_id' => (string) Str::uuid(),
             'is_public' => BinaryChoice::YES,
         ]);
 
         $filter = new AlbumFilterRecord(
             albumable_type: 'App\Models\User',
-            albumable_id: 1,
+            albumable_id: $userId,
             is_public: BinaryChoice::YES,
         );
 
@@ -297,12 +306,13 @@ final class AlbumRepositoryTest extends IntegrationTestCase
     private function createAlbum(array $attributes = []): Album
     {
         $defaults = [
-            'name' => 'Test Album '.uniqid(),
-            'slug' => 'test-album-'.uniqid(),
+            'id' => (string) Str::uuid(),
+            'name' => 'Test Album '.Str::uuid(),
+            'slug' => 'test-album-'.Str::uuid(),
             'is_public' => BinaryChoice::YES,
             'is_featured' => BinaryChoice::NO,
             'albumable_type' => 'App\Models\User',
-            'albumable_id' => 1,
+            'albumable_id' => (string) Str::uuid(),
         ];
 
         $data = array_merge($defaults, $attributes);

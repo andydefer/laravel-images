@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace AndyDefer\LaravelImages\Observers;
 
 use AndyDefer\LaravelImages\Models\Album;
+use Illuminate\Support\Str;
 
 /**
  * Observer responsible for maintaining album-image relationship integrity.
@@ -14,6 +15,16 @@ use AndyDefer\LaravelImages\Models\Album;
  */
 final class AlbumObserver
 {
+    /**
+     * Generates a UUID for the album before creation if not already set.
+     */
+    public function creating(Album $album): void
+    {
+        if (empty($album->id)) {
+            $album->id = (string) Str::uuid();
+        }
+    }
+
     /**
      * Removes image relationships before an album is soft-deleted.
      *
