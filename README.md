@@ -122,6 +122,71 @@ class User extends Model
 }
 ```
 
+### 3.4 Trait HasMediables
+
+Le package fournit un trait `HasMediables` pour ajouter des attributs calculés à vos modèles.
+
+#### Installation dans un modèle
+
+```php
+<?php
+
+namespace App\Models;
+
+use AndyDefer\LaravelImages\Traits\HasMediables;
+use Illuminate\Database\Eloquent\Model;
+
+class User extends Model
+{
+    use HasMediables;
+
+    // Aucune relation nécessaire !
+    // Les attributs sont disponibles directement
+}
+```
+
+#### Attributs disponibles
+
+| Attribut | Type | Description |
+|----------|------|-------------|
+| `has_images` | `bool` | Vérifie si le modèle a des images |
+| `images_count` | `int` | Nombre total d'images |
+| `primary_image` | `Image|null` | Image principale |
+| `avatar` | `Image|null` | Image de type AVATAR |
+| `cover` | `Image|null` | Image de type COVER |
+| `banner` | `Image|null` | Image de type BANNER |
+| `logo` | `Image|null` | Image de type LOGO |
+| `icon` | `Image|null` | Image de type ICON |
+| `gallery_images` | `Collection<Image>` | Images de type GALLERY |
+| `has_albums` | `bool` | Vérifie si le modèle a des albums |
+| `albums_count` | `int` | Nombre total d'albums |
+| `primary_album` | `Album|null` | Premier album créé |
+| `featured_album` | `Album|null` | Album mis en avant |
+| `public_albums` | `Collection<Album>` | Albums publics |
+| `private_albums` | `Collection<Album>` | Albums privés |
+
+#### Exemple d'utilisation
+
+```php
+$user = User::find(1);
+
+// Vérifier si l'utilisateur a des images
+if ($user->has_images) {
+    echo "L'utilisateur a {$user->images_count} images";
+}
+
+// Récupérer l'avatar
+$avatar = $user->avatar;
+if ($avatar) {
+    echo $avatar->full_url;
+}
+
+// Récupérer les albums publics
+foreach ($user->public_albums as $album) {
+    echo $album->name;
+}
+```
+
 ---
 
 ## 4. Gestion des images
