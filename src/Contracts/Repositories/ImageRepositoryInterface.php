@@ -18,8 +18,8 @@ interface ImageRepositoryInterface extends AbstractRepositoryInterface
      * Get the primary image for a model.
      *
      * @param  string  $imageableType  The morph class of the parent model
-     * @param  int  $imageableId  The ID of the parent model
+     * @param  string  $imageableId  The UUID of the parent model
      * @return Image|null The primary image or null if not found
      */
-    public function getPrimaryImageForModel(string $imageableType, int $imageableId): ?Image;
+    public function getPrimaryImageForModel(string $imageableType, string $imageableId): ?Image;
 }

@@ -15,10 +15,10 @@ use AndyDefer\PhpVo\ValueObjects\DateTimeVO;
 final class ImageFilterRecord extends AbstractRecord
 {
     public function __construct(
-        public readonly ?int $id = null,
+        public readonly ?string $id = null,
         public readonly ?StringTypedCollection $ids = null,
         public readonly ?string $imageable_type = null,
-        public readonly ?int $imageable_id = null,
+        public readonly ?string $imageable_id = null,
         public readonly ?ImageType $type = null,
         public readonly ?ImageTypeCollection $types = null,
         public readonly ?int $min_size = null,

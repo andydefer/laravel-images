@@ -6,19 +6,6 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-/**
- * Migration for creating the images table.
- *
- * This table stores image file metadata and supports polymorphic relationships
- * with various models (e.g., User, Post, Product).
- *
- * @category Database
- *
- * @author   Andy Defer
- * @license  MIT
- *
- * @see      https://laravel.com/docs/migrations
- */
 return new class extends Migration
 {
     /**
@@ -30,13 +17,14 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('images', function (Blueprint $table): void {
-            $table->id();
+            $table->uuid('id')->primary();
 
             $this->addFileInformationColumns($table);
             $this->addImageTypeColumn($table);
             $this->addDimensionsColumns($table);
             $this->addMetadataColumn($table);
             $this->addOrderAndFlagsColumns($table);
+            $this->addInverseImageColumn($table);
             $this->addUploaderInformationColumns($table);
             $this->addPolymorphicRelationColumns($table);
             $this->addTimestampsAndSoftDeletes($table);
@@ -125,6 +113,20 @@ return new class extends Migration
     }
 
     /**
+     * Add inverse image column for dark/light mode variants.
+     *
+     * @param  Blueprint  $table  The blueprint instance
+     */
+    private function addInverseImageColumn(Blueprint $table): void
+    {
+        $table->uuid('inverse_image_id')->nullable();
+        $table->foreign('inverse_image_id')
+            ->references('id')
+            ->on('images')
+            ->nullOnDelete();
+    }
+
+    /**
      * Add uploader information columns.
      *
      * Stores polymorphic relation to the uploader (Admin, User, etc.).
@@ -134,7 +136,7 @@ return new class extends Migration
     private function addUploaderInformationColumns(Blueprint $table): void
     {
         $table->string('uploaded_by_type')->nullable();
-        $table->unsignedBigInteger('uploaded_by_id')->nullable();
+        $table->uuid('uploaded_by_id')->nullable();
     }
 
     /**
@@ -147,7 +149,7 @@ return new class extends Migration
     private function addPolymorphicRelationColumns(Blueprint $table): void
     {
         $table->string('imageable_type')->index();
-        $table->unsignedBigInteger('imageable_id')->index();
+        $table->uuid('imageable_id')->index();
     }
 
     /**

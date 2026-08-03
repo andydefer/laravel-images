@@ -11,6 +11,10 @@ use AndyDefer\LaravelImages\Contracts\Services\AlbumServiceInterface;
 use AndyDefer\LaravelImages\Contracts\Services\ImageServiceInterface;
 use AndyDefer\LaravelImages\Contracts\Storage\ImageStorageInterface;
 use AndyDefer\LaravelImages\Factories\ImageProcessorFactory;
+use AndyDefer\LaravelImages\Models\Album;
+use AndyDefer\LaravelImages\Models\Image;
+use AndyDefer\LaravelImages\Observers\AlbumObserver;
+use AndyDefer\LaravelImages\Observers\ImageObserver;
 use AndyDefer\LaravelImages\Repositories\AlbumRepository;
 use AndyDefer\LaravelImages\Repositories\ImageRepository;
 use AndyDefer\LaravelImages\Services\AlbumService;
@@ -46,6 +50,7 @@ final class ImageServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        $this->registerObservers();
         $this->loadMigrations();
         $this->publishAssets();
     }
@@ -155,6 +160,15 @@ final class ImageServiceProvider extends ServiceProvider
                 );
             }
         );
+    }
+
+    /**
+     * Registers model observers.
+     */
+    private function registerObservers(): void
+    {
+        Album::observe(AlbumObserver::class);
+        Image::observe(ImageObserver::class);
     }
 
     /**

@@ -23,10 +23,11 @@ use Illuminate\Support\Collection;
 use RuntimeException;
 
 /**
- * Service for managing images.
+ * Orchestrates image management operations including upload, storage,
+ * thumbnail generation, and relational handling.
  *
- * Provides comprehensive image management including upload, deletion,
- * retrieval, reordering, and thumbnail generation.
+ * This service acts as the primary entry point for all image operations,
+ * coordinating between storage, processing, and repository layers.
  */
 final class ImageService implements ImageServiceInterface
 {
@@ -45,12 +46,12 @@ final class ImageService implements ImageServiceInterface
     /**
      * {@inheritDoc}
      */
-    public function findImage(int $id): ?Image
+    public function findImage(string $id): ?Image
     {
         $filter = ImageFilterRecord::from(['id' => $id]);
-        $findByRecord = new FindByRecord(filters: $filter, limit: 1);
+        $query = new FindByRecord(filters: $filter, limit: 1);
 
-        return $this->imageRepository->findBy($findByRecord)->first();
+        return $this->imageRepository->findBy($query)->first();
     }
 
     /**
@@ -65,31 +66,21 @@ final class ImageService implements ImageServiceInterface
     ): Image {
         $this->validateFile($file, $type);
 
+        $options ??= new ImageOptionsRecord;
         $storagePath = $this->storeFile($file, $imageable, $type);
         $dimensions = $this->extractImageDimensions($file);
-        $options = $options ?? new ImageOptionsRecord;
-
         $metadata = $this->buildMetadataFromOptions($options);
 
-        $imageRecord = ImageRecord::from([
-            'path' => $storagePath,
-            'filename' => $file->hashName(),
-            'original_filename' => $file->getClientOriginalName(),
-            'extension' => $file->getClientOriginalExtension(),
-            'mime_type' => $file->getMimeType(),
-            'size' => $this->getFileSize($file),
-            'width' => $dimensions['width'] ?? null,
-            'height' => $dimensions['height'] ?? null,
-            'type' => $type,
-            'metadata' => $metadata,
-            'order' => $options->order ?? self::DEFAULT_ORDER,
-            'is_primary' => $options->is_primary ?? self::DEFAULT_IS_PRIMARY,
-            'is_processed' => false,
-            'imageable_type' => $imageable->getMorphClass(),
-            'imageable_id' => $imageable->getKey(),
-            'uploaded_by_type' => $uploadedBy?->getMorphClass(),
-            'uploaded_by_id' => $uploadedBy?->getKey(),
-        ]);
+        $imageRecord = $this->buildImageRecord(
+            file: $file,
+            storagePath: $storagePath,
+            imageable: $imageable,
+            uploadedBy: $uploadedBy,
+            type: $type,
+            options: $options,
+            metadata: $metadata,
+            dimensions: $dimensions,
+        );
 
         $createdImage = $this->imageRepository->create($imageRecord);
 
@@ -117,7 +108,7 @@ final class ImageService implements ImageServiceInterface
                 continue;
             }
 
-            $imageOptions = $this->resolveImageOptions($options, $index);
+            $imageOptions = $this->resolveImageOptionsForMultiple($options, $index);
             $image = $this->upload($file, $imageable, $uploadedBy, $type, $imageOptions);
             $results->add($image);
         }
@@ -128,7 +119,7 @@ final class ImageService implements ImageServiceInterface
     /**
      * {@inheritDoc}
      */
-    public function update(ImageRecord $record, int $id): Image
+    public function update(ImageRecord $record, string $id): Image
     {
         return $this->imageRepository->update($id, $record);
     }
@@ -136,7 +127,7 @@ final class ImageService implements ImageServiceInterface
     /**
      * {@inheritDoc}
      */
-    public function delete(int $id, bool $deleteFile = true): void
+    public function delete(string $id, bool $deleteFile = true): void
     {
         $image = $this->findImage($id);
 
@@ -218,14 +209,14 @@ final class ImageService implements ImageServiceInterface
         ]);
 
         return $this->imageRepository->findBy(
-            new FindByRecord(filters: $filter, limit: 1)
+            new FindByRecord(filters: $filter, limit: 1),
         )->first();
     }
 
     /**
      * {@inheritDoc}
      */
-    public function setAsPrimary(int $id, Model $model): void
+    public function setAsPrimary(string $id, Model $model): void
     {
         $filter = ImageFilterRecord::from([
             'imageable_type' => $model->getMorphClass(),
@@ -238,7 +229,7 @@ final class ImageService implements ImageServiceInterface
             $isPrimary = $image->id === $id;
             $this->imageRepository->update(
                 $image->id,
-                ImageRecord::from(['is_primary' => $isPrimary])
+                ImageRecord::from(['is_primary' => $isPrimary]),
             );
         }
     }
@@ -275,7 +266,7 @@ final class ImageService implements ImageServiceInterface
         foreach ($ids as $index => $id) {
             $this->imageRepository->update(
                 $id,
-                ImageRecord::from(['order' => $index + 1])
+                ImageRecord::from(['order' => $index + 1]),
             );
         }
     }
@@ -283,7 +274,7 @@ final class ImageService implements ImageServiceInterface
     /**
      * {@inheritDoc}
      */
-    public function getThumbnailUrl(int $imageId, string $size = self::DEFAULT_THUMBNAIL_SIZE): string
+    public function getThumbnailUrl(string $imageId, string $size = self::DEFAULT_THUMBNAIL_SIZE): string
     {
         $image = $this->findImage($imageId);
 
@@ -313,7 +304,27 @@ final class ImageService implements ImageServiceInterface
     }
 
     /**
-     * Deletes a physical file from storage.
+     * {@inheritDoc}
+     */
+    public function syncInverseRelation(Image $image): void
+    {
+        $variantType = $this->detectImageVariant($image->original_filename);
+
+        if ($variantType === null) {
+            return;
+        }
+
+        $inverseImage = $this->findInverseImage($image, $variantType);
+
+        if ($inverseImage !== null && $inverseImage->id !== $image->id) {
+            $this->linkImages($image, $inverseImage);
+        } elseif ($image->inverse_image_id !== null) {
+            $this->clearInverseRelation($image);
+        }
+    }
+
+    /**
+     * Removes the physical image file from storage.
      */
     private function deletePhysicalFile(ImagePathVO $imagePath): void
     {
@@ -321,9 +332,9 @@ final class ImageService implements ImageServiceInterface
     }
 
     /**
-     * Marks an image as processed after thumbnail generation.
+     * Marks an image as processed after successful thumbnail generation.
      */
-    private function markImageAsProcessed(int $imageId): Image
+    private function markImageAsProcessed(string $imageId): Image
     {
         $processedRecord = ImageRecord::from(['is_processed' => true]);
 
@@ -331,9 +342,9 @@ final class ImageService implements ImageServiceInterface
     }
 
     /**
-     * Resolves image options for upload multiple.
+     * Resolves image options for batch uploads, ensuring proper ordering.
      */
-    private function resolveImageOptions(?ImageOptionsRecord $options, int $index): ImageOptionsRecord
+    private function resolveImageOptionsForMultiple(?ImageOptionsRecord $options, int $index): ImageOptionsRecord
     {
         if ($options === null || $options->order === null) {
             return new ImageOptionsRecord(
@@ -352,7 +363,7 @@ final class ImageService implements ImageServiceInterface
     }
 
     /**
-     * Builds metadata from options.
+     * Builds metadata from the provided options.
      */
     private function buildMetadataFromOptions(ImageOptionsRecord $options): ?ImageMetadataVO
     {
@@ -367,6 +378,40 @@ final class ImageService implements ImageServiceInterface
         }
 
         return ! empty($data) ? new ImageMetadataVO($data) : null;
+    }
+
+    /**
+     * Constructs a complete ImageRecord from upload parameters.
+     */
+    private function buildImageRecord(
+        UploadedFile $file,
+        string $storagePath,
+        Model $imageable,
+        ?Model $uploadedBy,
+        ImageType $type,
+        ImageOptionsRecord $options,
+        ?ImageMetadataVO $metadata,
+        array $dimensions,
+    ): ImageRecord {
+        return ImageRecord::from([
+            'path' => $storagePath,
+            'filename' => $file->hashName(),
+            'original_filename' => $file->getClientOriginalName(),
+            'extension' => $file->getClientOriginalExtension(),
+            'mime_type' => $file->getMimeType(),
+            'size' => $this->getFileSize($file),
+            'width' => $dimensions['width'] ?? null,
+            'height' => $dimensions['height'] ?? null,
+            'type' => $type,
+            'metadata' => $metadata,
+            'order' => $options->order ?? self::DEFAULT_ORDER,
+            'is_primary' => $options->is_primary ?? self::DEFAULT_IS_PRIMARY,
+            'is_processed' => false,
+            'imageable_type' => $imageable->getMorphClass(),
+            'imageable_id' => $imageable->getKey(),
+            'uploaded_by_type' => $uploadedBy?->getMorphClass(),
+            'uploaded_by_id' => $uploadedBy?->getKey(),
+        ]);
     }
 
     /**
@@ -397,7 +442,7 @@ final class ImageService implements ImageServiceInterface
     {
         try {
             return $file->getSize();
-        } catch (RuntimeException $e) {
+        } catch (RuntimeException) {
             $realPath = $file->getRealPath();
 
             if ($realPath !== false && file_exists($realPath)) {
@@ -409,7 +454,7 @@ final class ImageService implements ImageServiceInterface
     }
 
     /**
-     * Generates thumbnails for an image.
+     * Generates thumbnails for the uploaded image based on type configuration.
      */
     private function generateThumbnails(string $path, ImageType $type): void
     {
@@ -420,13 +465,13 @@ final class ImageService implements ImageServiceInterface
             $this->imageProcessor->resize(
                 $imagePath,
                 $dimensions['width'],
-                $dimensions['height']
+                $dimensions['height'],
             );
         }
     }
 
     /**
-     * Deletes thumbnails for an image.
+     * Deletes all associated thumbnails for an image.
      */
     private function deleteThumbnails(ImagePathVO $imagePath): void
     {
@@ -440,7 +485,7 @@ final class ImageService implements ImageServiceInterface
     }
 
     /**
-     * Stores the uploaded file.
+     * Stores the uploaded file in the configured storage.
      */
     private function storeFile(UploadedFile $file, Model $imageable, ImageType $type): string
     {
@@ -451,17 +496,20 @@ final class ImageService implements ImageServiceInterface
     }
 
     /**
-     * Builds the storage path for an image.
+     * Builds the storage path for an image based on the parent model and type.
      */
     private function buildStoragePath(Model $imageable, ImageType $type): string
     {
-        return $imageable->getMorphClass()
-            .'/'.$imageable->getKey()
-            .'/'.$type->value;
+        return sprintf(
+            '%s/%s/%s',
+            $imageable->getMorphClass(),
+            $imageable->getKey(),
+            $type->value,
+        );
     }
 
     /**
-     * Gets the public URL for a path.
+     * Gets the public URL for a given storage path.
      */
     private function getPublicUrl(string $path): string
     {
@@ -469,7 +517,9 @@ final class ImageService implements ImageServiceInterface
     }
 
     /**
-     * Validates the uploaded file against type constraints.
+     * Validates the uploaded file against type-specific constraints.
+     *
+     * @throws RuntimeException When file validation fails
      */
     private function validateFile(UploadedFile $file, ImageType $type): void
     {
@@ -480,7 +530,7 @@ final class ImageService implements ImageServiceInterface
 
         if ($fileSizeInKB > $maxSize) {
             throw new RuntimeException(
-                sprintf('File size exceeds limit of %s KB', $maxSize)
+                sprintf('File size exceeds limit of %s KB', $maxSize),
             );
         }
 
@@ -488,8 +538,81 @@ final class ImageService implements ImageServiceInterface
 
         if (! in_array($fileMimeType, $allowedMimes, true)) {
             throw new RuntimeException(
-                sprintf('MIME type %s not allowed', $fileMimeType)
+                sprintf('MIME type %s not allowed', $fileMimeType),
             );
         }
+    }
+
+    /**
+     * Detects if an image filename indicates a light or dark variant.
+     *
+     * @return 'light'|'dark'|null The variant type, or null if none detected
+     */
+    private function detectImageVariant(string $filename): ?string
+    {
+        $basename = pathinfo($filename, PATHINFO_FILENAME);
+
+        if (str_ends_with($basename, '-light')) {
+            return 'light';
+        }
+
+        if (str_ends_with($basename, '-dark')) {
+            return 'dark';
+        }
+
+        return null;
+    }
+
+    /**
+     * Finds the inverse image (light ↔ dark) based on the current image.
+     *
+     * @param  'light'|'dark'  $variantType
+     */
+    private function findInverseImage(Image $image, string $variantType): ?Image
+    {
+        $basename = pathinfo($image->original_filename, PATHINFO_FILENAME);
+        $extension = pathinfo($image->original_filename, PATHINFO_EXTENSION);
+
+        $inverseBasename = $variantType === 'light'
+            ? str_replace('-light', '-dark', $basename)
+            : str_replace('-dark', '-light', $basename);
+
+        $inverseFilename = $inverseBasename.'.'.$extension;
+
+        $filter = ImageFilterRecord::from([
+            'imageable_type' => $image->imageable_type,
+            'imageable_id' => $image->imageable_id,
+            'type' => $image->type,
+            'search' => $inverseFilename,
+        ]);
+
+        $findByRecord = new FindByRecord(filters: $filter, limit: 1);
+
+        return $this->imageRepository->findBy($findByRecord)->first();
+    }
+
+    /**
+     * Establishes a bidirectional inverse relationship between two images.
+     */
+    private function linkImages(Image $image, Image $inverseImage): void
+    {
+        if ($image->inverse_image_id !== $inverseImage->id) {
+            $image->inverse_image_id = $inverseImage->id;
+            $image->saveQuietly();
+        }
+
+        if ($inverseImage->inverse_image_id !== $image->id) {
+            $inverseImage->inverse_image_id = $image->id;
+            $inverseImage->saveQuietly();
+        }
+    }
+
+    /**
+     * Clears the inverse relationship when the counterpart no longer exists.
+     */
+    private function clearInverseRelation(Image $image): void
+    {
+        $image->inverse_image_id = null;
+        $image->saveQuietly();
     }
 }

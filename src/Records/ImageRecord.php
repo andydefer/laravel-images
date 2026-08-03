@@ -11,10 +11,13 @@ use AndyDefer\LaravelImages\Enums\ImageType;
 use AndyDefer\LaravelImages\ValueObjects\ImageMetadataVO;
 use AndyDefer\PhpVo\ValueObjects\DateTimeVO;
 
+/**
+ * Record for image data transfer.
+ */
 final class ImageRecord extends AbstractRecord
 {
     public function __construct(
-        public readonly ?int $id = null,
+        public readonly ?string $id = null,
         public readonly ?string $path = null,
         public readonly ?string $filename = null,
         public readonly ?string $original_filename = null,
@@ -28,10 +31,11 @@ final class ImageRecord extends AbstractRecord
         public readonly ?int $order = null,
         public readonly ?bool $is_primary = null,
         public readonly ?bool $is_processed = null,
+        public readonly ?string $inverse_image_id = null,
         public readonly ?string $uploaded_by_type = null,
-        public readonly ?int $uploaded_by_id = null,
+        public readonly ?string $uploaded_by_id = null,
         public readonly ?string $imageable_type = null,
-        public readonly ?int $imageable_id = null,
+        public readonly ?string $imageable_id = null,
         public readonly ?DateTimeVO $created_at = null,
         public readonly ?DateTimeVO $updated_at = null,
         public readonly ?DateTimeVO $deleted_at = null,

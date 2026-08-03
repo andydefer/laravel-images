@@ -13,7 +13,7 @@ final class AlbumFilterRecord extends AbstractRecord
 {
     public function __construct(
         public readonly ?string $albumable_type = null,
-        public readonly ?int $albumable_id = null,
+        public readonly ?string $albumable_id = null,
         public readonly ?BinaryChoice $is_public = null,
         public readonly ?BinaryChoice $is_featured = null,
         public readonly ?StringTypedCollection $ids = null,

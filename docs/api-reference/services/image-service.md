@@ -2,7 +2,7 @@
 
 ## Description
 
-Service central de gestion des images. Fournit l'ensemble des opérations nécessaires à la manipulation des images : upload, suppression, récupération, réorganisation et génération de miniatures.
+Orchestre les opérations de gestion des images, incluant l'upload, le stockage, la génération de vignettes et la gestion des relations inverses entre variantes claires/sombres.
 
 ## Hiérarchie / Implémentations
 
@@ -13,7 +13,10 @@ ImageServiceInterface
 
 ## Rôle principal
 
-Orchestre toutes les opérations liées aux images. Il coordonne les interactions entre le repository `ImageRepository`, le processeur d'images `ImageProcessorInterface` et le stockage `ImageStorageInterface` pour offrir une API complète de gestion d'images.
+Point d'entrée unique pour toutes les opérations liées aux images. Coordonne les interactions entre :
+- Le **repository** (`ImageRepository`) pour les opérations base de données
+- Le **processeur** (`ImageProcessorInterface`) pour le traitement des images
+- Le **stockage** (`ImageStorageInterface`) pour la gestion des fichiers
 
 ## API / Méthodes publiques
 
@@ -21,109 +24,145 @@ Orchestre toutes les opérations liées aux images. Il coordonne les interaction
 
 | Paramètre | Type | Description |
 |-----------|------|-------------|
-| `$id` | `int` | Identifiant de l'image |
+| `$id` | `int` | Identifiant unique de l'image |
 
-**Retourne :** `Image|null` - L'image trouvée ou `null`
+**Retourne :** `?Image` - L'instance de l'image trouvée, ou `null` si inexistante
 
 **Exemple :**
 ```php
 $image = $imageService->findImage(42);
+if ($image !== null) {
+    echo $image->original_filename;
+}
 ```
+
+---
 
 ### `upload(UploadedFile $file, Model $imageable, ?Model $uploadedBy = null, ImageType $type = ImageType::GALLERY, ?ImageOptionsRecord $options = null): Image`
 
 | Paramètre | Type | Description |
 |-----------|------|-------------|
-| `$file` | `UploadedFile` | Fichier uploadé |
-| `$imageable` | `Model` | Modèle parent (relation polymorphique) |
-| `$uploadedBy` | `Model|null` | Utilisateur ayant uploadé |
-| `$type` | `ImageType` | Type d'image |
-| `$options` | `ImageOptionsRecord|null` | Options d'upload |
+| `$file` | `UploadedFile` | Fichier téléchargé depuis une requête HTTP |
+| `$imageable` | `Model` | Modèle parent auquel l'image est attachée |
+| `$uploadedBy` | `?Model` | Utilisateur ayant effectué l'upload (optionnel) |
+| `$type` | `ImageType` | Type d'image (GALLERY, AVATAR, COVER, BANNER) |
+| `$options` | `?ImageOptionsRecord` | Options supplémentaires (alt, caption, ordre, etc.) |
 
-**Retourne :** `Image` - Image créée
+**Retourne :** `Image` - L'instance de l'image créée
 
-**Exceptions :** `RuntimeException` - Validation du fichier échouée
+**Exceptions :** `RuntimeException` - Validation échouée
 
 **Exemple :**
 ```php
+$file = UploadedFile::fake()->image('avatar.jpg', 400, 400);
+$options = new ImageOptionsRecord(
+    alt_text: 'Photo de profil',
+    is_primary: true,
+    order: 1
+);
+
 $image = $imageService->upload(
-    $request->file('photo'),
-    $user,
-    auth()->user(),
-    ImageType::AVATAR,
-    new ImageOptionsRecord(alt_text: 'Photo de profil')
+    file: $file,
+    imageable: $user,
+    uploadedBy: $user,
+    type: ImageType::AVATAR,
+    options: $options
 );
 ```
+
+---
 
 ### `uploadMultiple(array $files, Model $imageable, ?Model $uploadedBy = null, ImageType $type = ImageType::GALLERY, ?ImageOptionsRecord $options = null): Collection`
 
 | Paramètre | Type | Description |
 |-----------|------|-------------|
-| `$files` | `array<UploadedFile>` | Tableau de fichiers |
+| `$files` | `array` | Tableau d'objets `UploadedFile` |
 | `$imageable` | `Model` | Modèle parent |
-| `$uploadedBy` | `Model|null` | Utilisateur ayant uploadé |
-| `$type` | `ImageType` | Type d'image |
-| `$options` | `ImageOptionsRecord|null` | Options d'upload |
+| `$uploadedBy` | `?Model` | Utilisateur ayant effectué l'upload |
+| `$type` | `ImageType` | Type d'image commun |
+| `$options` | `?ImageOptionsRecord` | Options communes à toutes les images |
 
-**Retourne :** `Collection<Image>` - Images créées
+**Retourne :** `Collection` - Collection des instances d'images créées
 
 **Exemple :**
 ```php
+$files = [
+    UploadedFile::fake()->image('photo1.jpg'),
+    UploadedFile::fake()->image('photo2.jpg'),
+];
+
 $images = $imageService->uploadMultiple(
-    $request->file('photos'),
-    $post,
-    auth()->user()
+    files: $files,
+    imageable: $album,
+    type: ImageType::GALLERY
 );
+
+foreach ($images as $image) {
+    echo $image->original_filename;
+}
 ```
+
+---
 
 ### `update(ImageRecord $record, int $id): Image`
 
 | Paramètre | Type | Description |
 |-----------|------|-------------|
-| `$record` | `ImageRecord` | Données de mise à jour |
-| `$id` | `int` | ID de l'image |
+| `$record` | `ImageRecord` | Enregistrement contenant les données de mise à jour |
+| `$id` | `int` | Identifiant de l'image à mettre à jour |
 
-**Retourne :** `Image` - Image mise à jour
+**Retourne :** `Image` - L'instance de l'image mise à jour
+
+**Exceptions :** `ModelNotFoundException` - Image non trouvée
 
 **Exemple :**
 ```php
-$image = $imageService->update(
-    ImageRecord::from(['alt_text' => 'Nouveau texte']),
-    42
-);
+$record = ImageRecord::from([
+    'is_primary' => true,
+    'order' => 1,
+]);
+
+$updatedImage = $imageService->update($record, 42);
 ```
+
+---
 
 ### `delete(int $id, bool $deleteFile = true): void`
 
 | Paramètre | Type | Description |
 |-----------|------|-------------|
-| `$id` | `int` | ID de l'image |
-| `$deleteFile` | `bool` | Supprimer aussi le fichier physique |
+| `$id` | `int` | Identifiant de l'image |
+| `$deleteFile` | `bool` | Supprimer également le fichier physique (défaut: `true`) |
 
 **Exceptions :** `RuntimeException` - Image non trouvée
 
 **Exemple :**
 ```php
-$imageService->delete(42);
+$imageService->delete(42); // Supprime l'image et le fichier
+$imageService->delete(42, false); // Supprime uniquement l'enregistrement
 ```
+
+---
 
 ### `deleteMultiple(array $ids, bool $deleteFile = true): void`
 
 | Paramètre | Type | Description |
 |-----------|------|-------------|
-| `$ids` | `array<int>` | IDs des images |
+| `$ids` | `array` | Tableau d'identifiants |
 | `$deleteFile` | `bool` | Supprimer les fichiers physiques |
 
 **Exemple :**
 ```php
-$imageService->deleteMultiple([1, 2, 3]);
+$imageService->deleteMultiple([42, 43, 44]);
 ```
+
+---
 
 ### `deleteAllForModel(Model $model, bool $deleteFile = true): void`
 
 | Paramètre | Type | Description |
 |-----------|------|-------------|
-| `$model` | `Model` | Modèle parent |
+| `$model` | `Model` | Modèle dont toutes les images doivent être supprimées |
 | `$deleteFile` | `bool` | Supprimer les fichiers physiques |
 
 **Exemple :**
@@ -131,19 +170,24 @@ $imageService->deleteMultiple([1, 2, 3]);
 $imageService->deleteAllForModel($user);
 ```
 
+---
+
 ### `getImagesForModel(Model $model, ?ImageType $type = null): Collection`
 
 | Paramètre | Type | Description |
 |-----------|------|-------------|
 | `$model` | `Model` | Modèle parent |
-| `$type` | `ImageType|null` | Filtrer par type |
+| `$type` | `?ImageType` | Filtrer par type d'image (optionnel) |
 
-**Retourne :** `Collection<Image>` - Images du modèle
+**Retourne :** `Collection` - Collection des images associées
 
 **Exemple :**
 ```php
 $avatars = $imageService->getImagesForModel($user, ImageType::AVATAR);
+$allImages = $imageService->getImagesForModel($user);
 ```
+
+---
 
 ### `getPrimaryImage(Model $model): ?Image`
 
@@ -151,18 +195,23 @@ $avatars = $imageService->getImagesForModel($user, ImageType::AVATAR);
 |-----------|------|-------------|
 | `$model` | `Model` | Modèle parent |
 
-**Retourne :** `Image|null` - Image principale
+**Retourne :** `?Image` - L'image principale ou `null`
 
 **Exemple :**
 ```php
 $primary = $imageService->getPrimaryImage($user);
+if ($primary !== null) {
+    echo $primary->getThumbnailUrl();
+}
 ```
+
+---
 
 ### `setAsPrimary(int $id, Model $model): void`
 
 | Paramètre | Type | Description |
 |-----------|------|-------------|
-| `$id` | `int` | ID de l'image à définir comme principale |
+| `$id` | `int` | Identifiant de l'image à définir comme principale |
 | `$model` | `Model` | Modèle parent |
 
 **Exemple :**
@@ -170,12 +219,14 @@ $primary = $imageService->getPrimaryImage($user);
 $imageService->setAsPrimary(42, $user);
 ```
 
+---
+
 ### `countImages(Model $model, ?ImageType $type = null): int`
 
 | Paramètre | Type | Description |
 |-----------|------|-------------|
 | `$model` | `Model` | Modèle parent |
-| `$type` | `ImageType|null` | Filtrer par type |
+| `$type` | `?ImageType` | Filtrer par type |
 
 **Retourne :** `int` - Nombre d'images
 
@@ -184,157 +235,221 @@ $imageService->setAsPrimary(42, $user);
 $count = $imageService->countImages($user, ImageType::AVATAR);
 ```
 
+---
+
 ### `getImagesUpdatedAfter(DateTimeVO $date): Collection`
 
 | Paramètre | Type | Description |
 |-----------|------|-------------|
-| `$date` | `DateTimeVO` | Date seuil |
+| `$date` | `DateTimeVO` | Date limite |
 
-**Retourne :** `Collection<Image>` - Images mises à jour après la date
+**Retourne :** `Collection` - Images mises à jour après la date
 
 **Exemple :**
 ```php
-$recentImages = $imageService->getImagesUpdatedAfter(
-    DateTimeVO::from(now()->subDay())
-);
+$date = DateTimeVO::from(now()->subDay());
+$recentImages = $imageService->getImagesUpdatedAfter($date);
 ```
+
+---
 
 ### `reorder(array $ids): void`
 
 | Paramètre | Type | Description |
 |-----------|------|-------------|
-| `$ids` | `array<int>` | IDs des images dans le nouvel ordre |
+| `$ids` | `array` | Tableau d'identifiants dans le nouvel ordre |
 
 **Exemple :**
 ```php
-$imageService->reorder([3, 1, 4, 2]);
+$imageService->reorder([42, 43, 44]); // 42 devient order=1, 43=2, 44=3
 ```
+
+---
 
 ### `getThumbnailUrl(int $imageId, string $size = 'small'): string`
 
 | Paramètre | Type | Description |
 |-----------|------|-------------|
-| `$imageId` | `int` | ID de l'image |
-| `$size` | `string` | Taille de la miniature (small, medium, large) |
+| `$imageId` | `int` | Identifiant de l'image |
+| `$size` | `string` | Taille de la vignette ('small', 'medium', 'large') |
 
-**Retourne :** `string` - URL de la miniature
+**Retourne :** `string` - URL publique de la vignette
 
 **Exceptions :** `RuntimeException` - Image non trouvée
 
 **Exemple :**
 ```php
-$url = $imageService->getThumbnailUrl(42, 'medium');
+$url = $imageService->getThumbnailUrl(42, 'large');
+echo $url; // https://example.com/storage/.../image_large.jpg
 ```
+
+---
+
+### `syncInverseRelation(Image $image): void`
+
+Synchronise la relation inverse entre les variantes claires/sombres.
+
+| Paramètre | Type | Description |
+|-----------|------|-------------|
+| `$image` | `Image` | L'image à synchroniser |
+
+**Exemple :**
+```php
+// Généralement appelé automatiquement par l'ImageObserver
+$imageService->syncInverseRelation($image);
+```
+
+---
 
 ## Cas d'utilisation
 
-### Cas 1 : Upload d'une image avec options
-
-Upload d'une image avec métadonnées et génération de miniatures.
+### Cas 1 : Upload d'un avatar utilisateur avec options
 
 ```php
-$image = $imageService->upload(
-    $request->file('avatar'),
-    $user,
-    auth()->user(),
-    ImageType::AVATAR,
-    new ImageOptionsRecord(
-        alt_text: 'Avatar de ' . $user->name,
-        caption: 'Photo de profil',
-        order: 1,
-        is_primary: true,
-        generate_thumbnails: true,
-    )
+<?php
+
+declare(strict_types=1);
+
+use AndyDefer\LaravelImages\Enums\ImageType;
+use AndyDefer\LaravelImages\Records\ImageOptionsRecord;
+
+$file = UploadedFile::fake()->image('profile.jpg', 400, 400);
+$options = new ImageOptionsRecord(
+    alt_text: 'Photo de profil de Jean',
+    caption: 'Avatar 2024',
+    is_primary: true,
+    order: 1,
+    generate_thumbnails: true
 );
+
+$image = $imageService->upload(
+    file: $file,
+    imageable: $user,
+    uploadedBy: $user,
+    type: ImageType::AVATAR,
+    options: $options
+);
+
+echo "Image uploadée avec l'ID : " . $image->id;
+echo "URL de la vignette : " . $imageService->getThumbnailUrl($image->id);
 ```
 
-### Cas 2 : Gestion des images d'un modèle
-
-Récupération, comptage et suppression des images d'un modèle.
+### Cas 2 : Upload multiple pour une galerie photo
 
 ```php
-// Compter les images
-$count = $imageService->countImages($post);
+<?php
 
-// Récupérer les images
-$images = $imageService->getImagesForModel($post);
+declare(strict_types=1);
 
-// Supprimer toutes les images
-$imageService->deleteAllForModel($post);
+$files = [
+    UploadedFile::fake()->image('vacation1.jpg'),
+    UploadedFile::fake()->image('vacation2.jpg'),
+    UploadedFile::fake()->image('vacation3.jpg'),
+];
+
+$images = $imageService->uploadMultiple(
+    files: $files,
+    imageable: $album,
+    type: ImageType::GALLERY
+);
+
+// Les images sont automatiquement ordonnées (1, 2, 3)
+foreach ($images as $index => $image) {
+    echo "Image " . ($index + 1) . " : " . $image->original_filename;
+    echo "Ordre : " . $image->order;
+}
+
+// Définir la première image comme principale
+$imageService->setAsPrimary($images->first()->id, $album);
 ```
 
-### Cas 3 : Gestion de l'image principale
-
-Définition et récupération de l'image principale.
+### Cas 3 : Gestion des variantes claires/sombres (Banner)
 
 ```php
-// Définir une image comme principale
-$imageService->setAsPrimary($imageId, $post);
+<?php
 
-// Récupérer l'image principale
-$primary = $imageService->getPrimaryImage($post);
+declare(strict_types=1);
 
-if ($primary) {
-    echo $primary->filename;
+// Upload des deux variantes
+$darkFile = UploadedFile::fake()->image('banner-dark.jpg', 1200, 400);
+$lightFile = UploadedFile::fake()->image('banner-light.jpg', 1200, 400);
+
+$darkImage = $imageService->upload($darkFile, $page, null, ImageType::BANNER);
+$lightImage = $imageService->upload($lightFile, $page, null, ImageType::BANNER);
+
+// L'ImageObserver synchronise automatiquement la relation
+$darkImage->refresh();
+$lightImage->refresh();
+
+echo "Image dark liée à : " . $darkImage->inverse_image_id; // ID de l'image light
+echo "Image light liée à : " . $lightImage->inverse_image_id; // ID de l'image dark
+```
+
+### Cas 4 : Nettoyage complet des images d'un utilisateur
+
+```php
+<?php
+
+declare(strict_types=1);
+
+// Supprimer toutes les images d'un utilisateur
+$imageService->deleteAllForModel($user);
+
+// Vérifier le nettoyage
+$count = $imageService->countImages($user);
+echo "Il reste $count images"; // 0
+```
+
+### Cas 5 : Réorganisation d'une galerie
+
+```php
+<?php
+
+declare(strict_types=1);
+
+$images = $imageService->getImagesForModel($album);
+
+// Récupérer les IDs dans l'ordre souhaité
+$ids = $images->pluck('id')->toArray();
+$reorderedIds = array_reverse($ids);
+
+// Appliquer le nouvel ordre
+$imageService->reorder($reorderedIds);
+
+// Vérifier
+$reorderedImages = $imageService->getImagesForModel($album);
+foreach ($reorderedImages as $index => $image) {
+    echo "Position " . ($index + 1) . " : " . $image->original_filename;
 }
 ```
 
-### Cas 4 : Réorganisation des images
-
-Modification de l'ordre des images.
-
-```php
-$images = $imageService->getImagesForModel($album);
-$ids = $images->pluck('id')->toArray();
-
-// Inverser l'ordre
-$imageService->reorder(array_reverse($ids));
-```
-
-### Cas 5 : Récupération des miniatures
-
-Affichage des miniatures dans une galerie.
-
-```php
-$image = $imageService->findImage(42);
-
-$thumbnails = [
-    'small' => $imageService->getThumbnailUrl($image->id, 'small'),
-    'medium' => $imageService->getThumbnailUrl($image->id, 'medium'),
-    'large' => $imageService->getThumbnailUrl($image->id, 'large'),
-];
-```
+---
 
 ## Gestion des erreurs
 
 | Situation | Exception | Message |
 |-----------|-----------|---------|
-| Image non trouvée | `RuntimeException` | `Image not found: {id}` |
-| Taille de fichier excessive | `RuntimeException` | `File size exceeds limit of {maxSize} KB` |
-| Type MIME non autorisé | `RuntimeException` | `MIME type {mimeType} not allowed` |
+| Image non trouvée (delete) | `RuntimeException` | `Image not found: {id}` |
+| Image non trouvée (thumbnail) | `RuntimeException` | `Image not found: {imageId}` |
+| Taille du fichier trop grande | `RuntimeException` | `File size exceeds limit of {maxSize} KB` |
+| MIME type non autorisé | `RuntimeException` | `MIME type {mimeType} not allowed` |
 
 ## Intégration
 
-Le `ImageService` s'intègre avec :
+Le `ImageService` travaille en étroite collaboration avec :
 
-- **ImageRepository** : Accès aux données des images
-- **ImageProcessorInterface** : Traitement des images (GD/Imagick)
-- **ImageStorageInterface** : Stockage des fichiers
-- **ImageOptionsRecord** : Options d'upload
-- **ImageFilterRecord** : Filtres de recherche
+- **`ImageRepository`** : Toutes les opérations CRUD utilisent le repository
+- **`ImageProcessorInterface`** : Génération des vignettes et transformations
+- **`ImageStorageInterface`** : Stockage et suppression des fichiers
+- **`ImageObserver`** : Synchronisation automatique des relations inverses
+- **`ImageType`** : Enum définissant les types et leurs configurations
 
 ## Performance
 
-- Les miniatures sont générées en arrière-plan lors de l'upload
-- Les opérations de suppression sont optimisées par lots
-- Les requêtes de récupération utilisent les index de la base de données
-- Le stockage est configurable pour optimiser les performances
-
-**Bonnes pratiques :**
-- Utiliser `uploadMultiple()` pour les uploads groupés
-- Activer `generate_thumbnails` pour éviter la génération à la volée
-- Utiliser `getImagesForModel()` avec le paramètre `$type` pour filtrer
-- Appeler `reorder()` pour modifier l'ordre des images en une seule opération
+- **Upload** : O(n) avec n = nombre d'images pour les uploads multiples
+- **Recherche** : Indexée sur les colonnes `imageable_type`, `imageable_id`, `type`
+- **Génération de vignettes** : Asynchrone par défaut (pas de blocage)
+- **Relations inverses** : Une seule requête par synchronisation avec `search` sur `original_filename`
 
 ## Compatibilité
 
@@ -342,11 +457,7 @@ Le `ImageService` s'intègre avec :
 |-------------|---------|
 | PHP 8.1+ | ✅ Complet |
 | PHP 8.0 | ✅ Complet |
-
-| Framework | Support |
-|-----------|---------|
-| Laravel 10+ | ✅ Complet |
-| Laravel 9 | ✅ Complet |
+| PHP 7.4 | ❌ Non supporté (nécessite PHP 8.1 pour les types) |
 
 ## Exemple complet
 
@@ -358,59 +469,93 @@ declare(strict_types=1);
 use AndyDefer\LaravelImages\Enums\ImageType;
 use AndyDefer\LaravelImages\Records\ImageOptionsRecord;
 use AndyDefer\LaravelImages\Services\ImageService;
+use Illuminate\Http\UploadedFile;
 
-// 1. Upload d'une image
-$image = $imageService->upload(
-    $request->file('photo'),
-    $post,
-    auth()->user(),
-    ImageType::GALLERY,
-    new ImageOptionsRecord(
-        alt_text: 'Photo de l\'article',
-        order: 1,
-    )
-);
+class UserProfileController
+{
+    public function __construct(
+        private readonly ImageService $imageService
+    ) {}
 
-echo "Image uploadée : " . $image->filename . "\n";
+    public function updateAvatar(Request $request, User $user): JsonResponse
+    {
+        $file = $request->file('avatar');
 
-// 2. Ajouter d'autres images
-$images = $imageService->uploadMultiple(
-    $request->file('photos'),
-    $post,
-    auth()->user()
-);
+        // Valider le fichier
+        if (!$file instanceof UploadedFile) {
+            return response()->json(['error' => 'Invalid file'], 422);
+        }
 
-echo "Images uploadées : " . $images->count() . "\n";
+        // Supprimer l'ancien avatar
+        $oldAvatar = $this->imageService->getPrimaryImage($user);
+        if ($oldAvatar !== null) {
+            $this->imageService->delete($oldAvatar->id);
+        }
 
-// 3. Définir l'image principale
-$imageService->setAsPrimary($image->id, $post);
+        // Upload du nouvel avatar
+        $options = new ImageOptionsRecord(
+            alt_text: 'Avatar de ' . $user->name,
+            is_primary: true,
+            order: 1
+        );
 
-// 4. Récupérer l'image principale
-$primary = $imageService->getPrimaryImage($post);
-echo "Image principale : " . $primary->filename . "\n";
+        $avatar = $this->imageService->upload(
+            file: $file,
+            imageable: $user,
+            uploadedBy: $user,
+            type: ImageType::AVATAR,
+            options: $options
+        );
 
-// 5. Récupérer toutes les images
-$allImages = $imageService->getImagesForModel($post);
+        return response()->json([
+            'message' => 'Avatar mis à jour',
+            'id' => $avatar->id,
+            'thumbnail' => $this->imageService->getThumbnailUrl($avatar->id, 'small'),
+        ]);
+    }
 
-foreach ($allImages as $img) {
-    $thumbnail = $imageService->getThumbnailUrl($img->id, 'small');
-    echo "- " . $img->filename . " (miniature: " . $thumbnail . ")\n";
+    public function uploadGallery(Request $request, Album $album): JsonResponse
+    {
+        $files = $request->file('images');
+
+        if (!is_array($files)) {
+            return response()->json(['error' => 'Invalid files'], 422);
+        }
+
+        $options = new ImageOptionsRecord(
+            generate_thumbnails: true,
+            caption: 'Galerie ajoutée le ' . now()->format('d/m/Y')
+        );
+
+        $images = $this->imageService->uploadMultiple(
+            files: $files,
+            imageable: $album,
+            uploadedBy: $request->user(),
+            type: ImageType::GALLERY,
+            options: $options
+        );
+
+        // Marquer la première image comme principale
+        if ($images->isNotEmpty()) {
+            $this->imageService->setAsPrimary($images->first()->id, $album);
+        }
+
+        return response()->json([
+            'message' => count($images) . ' images uploadées',
+            'images' => $images->map(fn ($img) => [
+                'id' => $img->id,
+                'filename' => $img->original_filename,
+                'url' => $this->imageService->getThumbnailUrl($img->id),
+            ]),
+        ]);
+    }
 }
-
-// 6. Réorganiser les images
-$ids = $allImages->pluck('id')->reverse()->toArray();
-$imageService->reorder($ids);
-
-// 7. Supprimer une image
-$imageService->delete($image->id);
 ```
 
 ## Voir aussi
 
-- `ImageServiceInterface` - Interface du service
-- `ImageRepository` - Repository des images
-- `ImageProcessorInterface` - Interface du processeur
-- `ImageStorageInterface` - Interface du stockage
-- `ImageOptionsRecord` - Record des options
-- `ImageFilterRecord` - Record des filtres
-- `ImageType` - Enum des types d'images
+- `ImageRepository` - Documentation du repository et de ses méthodes
+- `ImageType` - Énumération des types d'images disponibles
+- `ImageObserver` - Documentation sur la synchronisation automatique
+- `ImageOptionsRecord` - Options de configuration pour l'upload
+- `ImageProcessorInterface` - Interface pour le traitement d'images

@@ -26,10 +26,10 @@ interface ImageServiceInterface
     /**
      * Find an image by its ID.
      *
-     * @param  int  $id  The image ID
+     * @param  string  $id  The image UUID
      * @return Image|null The found image or null if not found
      */
-    public function findImage(int $id): ?Image;
+    public function findImage(string $id): ?Image;
 
     /**
      * Upload and attach an image to a model.
@@ -73,25 +73,25 @@ interface ImageServiceInterface
      * Update an existing image.
      *
      * @param  ImageRecord  $record  The record containing updated data
-     * @param  int  $id  The image ID to update
+     * @param  string  $id  The image UUID to update
      * @return Image The updated image model
      */
-    public function update(ImageRecord $record, int $id): Image;
+    public function update(ImageRecord $record, string $id): Image;
 
     /**
      * Delete an image.
      *
-     * @param  int  $id  The image ID to delete
+     * @param  string  $id  The image UUID to delete
      * @param  bool  $deleteFile  Whether to delete the physical file
      *
      * @throws \RuntimeException If image not found
      */
-    public function delete(int $id, bool $deleteFile = true): void;
+    public function delete(string $id, bool $deleteFile = true): void;
 
     /**
      * Delete multiple images.
      *
-     * @param  array<int>  $ids  Array of image IDs to delete
+     * @param  array<string>  $ids  Array of image UUIDs to delete
      * @param  bool  $deleteFile  Whether to delete the physical files
      */
     public function deleteMultiple(array $ids, bool $deleteFile = true): void;
@@ -125,10 +125,10 @@ interface ImageServiceInterface
      * Set an image as the primary image for a model.
      * This will remove the primary flag from all other images of the same model.
      *
-     * @param  int  $id  The image ID to set as primary
+     * @param  string  $id  The image UUID to set as primary
      * @param  Model  $model  The parent model
      */
-    public function setAsPrimary(int $id, Model $model): void;
+    public function setAsPrimary(string $id, Model $model): void;
 
     /**
      * Count images for a model.
@@ -151,20 +151,20 @@ interface ImageServiceInterface
      * Reorder images by their IDs.
      * The order of IDs in the array determines the new order.
      *
-     * @param  array<int>  $ids  Array of image IDs in the desired order
+     * @param  array<string>  $ids  Array of image UUIDs in the desired order
      */
     public function reorder(array $ids): void;
 
     /**
      * Get the thumbnail URL for an image.
      *
-     * @param  int  $imageId  The image ID
+     * @param  string  $imageId  The image UUID
      * @param  string  $size  The thumbnail size (small, medium, large)
      * @return string The thumbnail URL
      *
      * @throws \RuntimeException If image not found
      */
-    public function getThumbnailUrl(int $imageId, string $size = 'small'): string;
+    public function getThumbnailUrl(string $imageId, string $size = 'small'): string;
 
     /**
      * Get the image processor instance.
@@ -179,4 +179,14 @@ interface ImageServiceInterface
      * @return ImageStorageInterface The storage handler
      */
     public function getStorage(): ImageStorageInterface;
+
+    /**
+     * Synchronize the inverse relation between light and dark variants.
+     *
+     * This method detects if an image is a light or dark variant and links it
+     * with its counterpart automatically.
+     *
+     * @param  Image  $image  The image to synchronize
+     */
+    public function syncInverseRelation(Image $image): void;
 }

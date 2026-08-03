@@ -38,11 +38,11 @@ final class AlbumRepository extends AbstractRepository implements AlbumRepositor
         }
 
         if ($filters->is_public !== null) {
-            $query->where('is_public', $filters->is_public);
+            $query->where('is_public', $filters->is_public->value);
         }
 
         if ($filters->is_featured !== null) {
-            $query->where('is_featured', $filters->is_featured);
+            $query->where('is_featured', $filters->is_featured->value);
         }
 
         if ($filters->ids !== null && $filters->ids->isNotEmpty()) {
@@ -63,7 +63,7 @@ final class AlbumRepository extends AbstractRepository implements AlbumRepositor
     /**
      * {@inheritDoc}
      */
-    public function setPublic(int $id, BinaryChoice $isPublic): Album
+    public function setPublic(string $id, BinaryChoice $isPublic): Album
     {
         $record = AlbumRecord::from([
             'is_public' => $isPublic,
@@ -75,7 +75,7 @@ final class AlbumRepository extends AbstractRepository implements AlbumRepositor
     /**
      * {@inheritDoc}
      */
-    public function setFeatured(int $id, BinaryChoice $isFeatured): Album
+    public function setFeatured(string $id, BinaryChoice $isFeatured): Album
     {
         $record = AlbumRecord::from([
             'is_featured' => $isFeatured,

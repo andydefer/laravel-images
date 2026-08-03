@@ -12,14 +12,17 @@ use AndyDefer\LaravelUtils\Proxies\AttributeProxy;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 
 /**
  * Image model representing uploaded images with polymorphic relations.
  *
- * @property int $id
+ * @property string $id
  * @property ImagePathVO $path
  * @property string $filename
  * @property string $original_filename
@@ -29,14 +32,15 @@ use Illuminate\Support\Carbon;
  * @property ImageType $type
  * @property ImageMetadataVO $metadata
  * @property string $imageable_type
- * @property int $imageable_id
+ * @property string $imageable_id
  * @property int|null $width
  * @property int|null $height
  * @property int $order
  * @property bool $is_primary
  * @property bool $is_processed
+ * @property string|null $inverse_image_id
  * @property string|null $uploaded_by_type
- * @property int|null $uploaded_by_id
+ * @property string|null $uploaded_by_id
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property Carbon|null $deleted_at
@@ -45,18 +49,26 @@ use Illuminate\Support\Carbon;
  * @property-read string $full_url
  * @property-read string $file_size_for_humans
  * @property-read string $dimensions
+ * @property-read bool $has_inverse
  *
  * // Relations
  * @property-read Model|null $imageable
+ * @property-read Image|null $inverseImage
+ * @property-read HasMany<Image> $inverseImages
  */
 final class Image extends Model
 {
     use HasFactory;
     use SoftDeletes;
 
+    public $incrementing = false;
+
+    protected $keyType = 'string';
+
     protected $table = 'images';
 
     protected $fillable = [
+        'id',
         'path',
         'filename',
         'original_filename',
@@ -70,6 +82,7 @@ final class Image extends Model
         'order',
         'is_primary',
         'is_processed',
+        'inverse_image_id',
         'uploaded_by_type',
         'uploaded_by_id',
         'imageable_type',
@@ -95,6 +108,18 @@ final class Image extends Model
         return ImageFactory::new();
     }
 
+    /**
+     * Boot the model and register event listeners.
+     */
+    protected static function booted(): void
+    {
+        self::creating(function (Image $image): void {
+            if (empty($image->id)) {
+                $image->id = (string) Str::uuid();
+            }
+        });
+    }
+
     // ============================================================
     // RELATIONS
     // ============================================================
@@ -105,6 +130,26 @@ final class Image extends Model
     public function imageable(): MorphTo
     {
         return $this->morphTo();
+    }
+
+    /**
+     * Get the inverse image (dark/light variant).
+     *
+     * @return BelongsTo<Image, $this>
+     */
+    public function inverseImage(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'inverse_image_id');
+    }
+
+    /**
+     * Get the images that have this image as inverse.
+     *
+     * @return HasMany<Image>
+     */
+    public function inverseImages(): HasMany
+    {
+        return $this->hasMany(self::class, 'inverse_image_id');
     }
 
     // ============================================================
@@ -182,6 +227,18 @@ final class Image extends Model
     {
         return Attribute::make(
             get: fn (): string => $this->width.'x'.$this->height,
+        );
+    }
+
+    /**
+     * Check if the image has an inverse variant (dark/light mode).
+     *
+     * @return Attribute<bool, never>
+     */
+    protected function hasInverse(): Attribute
+    {
+        return Attribute::make(
+            get: fn (): bool => $this->inverse_image_id !== null
         );
     }
 }

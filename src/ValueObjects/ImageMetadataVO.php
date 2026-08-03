@@ -57,6 +57,14 @@ final class ImageMetadataVO extends AbstractValueObject
     }
 
     /**
+     * Returns whether the image supports inverse mode.
+     */
+    public function getInverseMode(): bool
+    {
+        return $this->data['inverse_mode'] ?? false;
+    }
+
+    /**
      * Creates a new instance with the specified order.
      *
      * @param  int  $order  The new order position
@@ -108,6 +116,32 @@ final class ImageMetadataVO extends AbstractValueObject
     {
         $data = $this->data;
         $data['caption'] = $caption;
+
+        return new self($data);
+    }
+
+    /**
+     * Creates a new instance with inverse mode enabled.
+     *
+     * @return self A new instance with inverse mode enabled
+     */
+    public function withInverseMode(): self
+    {
+        $data = $this->data;
+        $data['inverse_mode'] = true;
+
+        return new self($data);
+    }
+
+    /**
+     * Creates a new instance with inverse mode disabled.
+     *
+     * @return self A new instance with inverse mode disabled
+     */
+    public function withoutInverseMode(): self
+    {
+        $data = $this->data;
+        $data['inverse_mode'] = false;
 
         return new self($data);
     }

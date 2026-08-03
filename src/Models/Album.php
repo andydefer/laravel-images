@@ -19,20 +19,21 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 
 /**
  * Album model for grouping images.
  *
- * @property int $id
+ * @property string $id
  * @property string $name
  * @property SlugVO $slug
  * @property string|null $description
- * @property int|null $cover_image_id
+ * @property string|null $cover_image_id
  * @property BinaryChoice $is_public
  * @property BinaryChoice $is_featured
  * @property ClusterVO|null $metadata
  * @property string|null $albumable_type
- * @property int|null $albumable_id
+ * @property string|null $albumable_id
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property Carbon|null $deleted_at
@@ -50,9 +51,14 @@ final class Album extends Model
     use HasFactory;
     use SoftDeletes;
 
+    public $incrementing = false;
+
+    protected $keyType = 'string';
+
     protected $table = 'albums';
 
     protected $fillable = [
+        'id',
         'name',
         'slug',
         'description',
@@ -76,6 +82,18 @@ final class Album extends Model
     protected static function newFactory(): AlbumFactory
     {
         return AlbumFactory::new();
+    }
+
+    /**
+     * Boot the model and register event listeners.
+     */
+    protected static function booted(): void
+    {
+        self::creating(function (Album $album): void {
+            if (empty($album->id)) {
+                $album->id = (string) Str::uuid();
+            }
+        });
     }
 
     // ============================================================
@@ -145,12 +163,5 @@ final class Album extends Model
         return Attribute::make(
             get: fn (): int => $this->images()->count(),
         );
-    }
-
-    protected static function booted(): void
-    {
-        self::deleting(function (Album $album) {
-            $album->images()->detach();
-        });
     }
 }

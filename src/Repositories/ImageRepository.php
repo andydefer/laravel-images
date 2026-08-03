@@ -73,7 +73,6 @@ final class ImageRepository extends AbstractRepository implements ImageRepositor
             $query->where('updated_at', '>=', $filters->updated_at->toDateTimeString());
         }
 
-        // Nouveaux filtres
         if ($filters->is_primary !== null) {
             $query->where('is_primary', $filters->is_primary);
         }
@@ -100,9 +99,9 @@ final class ImageRepository extends AbstractRepository implements ImageRepositor
     }
 
     /**
-     * Get the primary image for a model.
+     * {@inheritDoc}
      */
-    public function getPrimaryImageForModel(string $imageableType, int $imageableId): ?Image
+    public function getPrimaryImageForModel(string $imageableType, string $imageableId): ?Image
     {
         $filter = new ImageFilterRecord(
             imageable_type: $imageableType,

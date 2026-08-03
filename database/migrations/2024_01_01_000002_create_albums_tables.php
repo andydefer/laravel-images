@@ -31,7 +31,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('albums', function (Blueprint $table): void {
-            $table->id();
+            $table->uuid('id')->primary();
 
             $this->addBasicInformationColumns($table);
             $this->addCoverImageRelationship($table);
@@ -78,9 +78,10 @@ return new class extends Migration
      */
     private function addCoverImageRelationship(Blueprint $table): void
     {
-        $table->foreignId('cover_image_id')
-            ->nullable()
-            ->constrained('images')
+        $table->uuid('cover_image_id')->nullable();
+        $table->foreign('cover_image_id')
+            ->references('id')
+            ->on('images')
             ->nullOnDelete();
     }
 
@@ -121,7 +122,7 @@ return new class extends Migration
     private function addPolymorphicRelationColumns(Blueprint $table): void
     {
         $table->string('albumable_type')->nullable()->index();
-        $table->unsignedBigInteger('albumable_id')->nullable()->index();
+        $table->uuid('albumable_id')->nullable()->index();
     }
 
     /**

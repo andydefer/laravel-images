@@ -13,11 +13,11 @@ return new class extends Migration
         Schema::create('album_image', function (Blueprint $table) {
             $table->id();
 
-            $table->foreignId('album_id')
+            $table->foreignUuid('album_id')
                 ->constrained('albums')
                 ->onDelete('cascade');
 
-            $table->foreignId('image_id')
+            $table->foreignUuid('image_id')
                 ->constrained('images')
                 ->onDelete('cascade');
 

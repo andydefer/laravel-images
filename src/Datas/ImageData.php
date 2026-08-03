@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace AndyDefer\LaravelImages\Datas;
 
 use AndyDefer\DomainStructures\Abstracts\AbstractData;
+use AndyDefer\DomainStructures\Collections\Utility\StringTypedCollection;
 use AndyDefer\LaravelImages\Enums\ImageExtension;
 use AndyDefer\LaravelImages\Enums\ImageMimeType;
 use AndyDefer\LaravelImages\Enums\ImageType;
@@ -31,6 +32,8 @@ use AndyDefer\PhpVo\ValueObjects\DateTimeVO;
  * @property-read int $order
  * @property-read bool $isPrimary
  * @property-read bool $isProcessed
+ * @property-read int|null $inverseImageId
+ * @property-read StringTypedCollection $inverseImageIds
  * @property-read string|null $uploadedByType
  * @property-read int|null $uploadedById
  * @property-read DateTimeVO $createdAt
@@ -58,6 +61,8 @@ final class ImageData extends AbstractData
         public readonly int $order,
         public readonly bool $isPrimary,
         public readonly bool $isProcessed,
+        public readonly ?int $inverseImageId,
+        public readonly StringTypedCollection $inverseImageIds,
         public readonly ?string $uploadedByType,
         public readonly ?int $uploadedById,
         public readonly DateTimeVO $createdAt,

@@ -14,6 +14,7 @@ use AndyDefer\LaravelImages\ValueObjects\ImageMetadataVO;
 use AndyDefer\PhpVo\ValueObjects\DateTimeVO;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Str;
 
 final class ImageServiceTest extends IntegrationTestCase
 {
@@ -37,7 +38,7 @@ final class ImageServiceTest extends IntegrationTestCase
         ]);
     }
 
-    private function createTestImage(array $options = []): int
+    private function createTestImage(array $options = []): string
     {
         $file = UploadedFile::fake()->image('test.jpg', 800, 600);
         $imageOptions = new ImageOptionsRecord(
@@ -62,7 +63,8 @@ final class ImageServiceTest extends IntegrationTestCase
 
     public function test_find_image_returns_null_when_not_exists(): void
     {
-        $found = $this->imageService->findImage(99999);
+        $nonExistentId = (string) Str::uuid();
+        $found = $this->imageService->findImage($nonExistentId);
         $this->assertNull($found);
     }
 
@@ -202,10 +204,12 @@ final class ImageServiceTest extends IntegrationTestCase
 
     public function test_delete_image_throws_exception_when_not_found(): void
     {
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('Image not found: 99999');
+        $nonExistentId = (string) Str::uuid();
 
-        $this->imageService->delete(99999);
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage("Image not found: {$nonExistentId}");
+
+        $this->imageService->delete($nonExistentId);
     }
 
     public function test_delete_multiple_images(): void
@@ -378,9 +382,88 @@ final class ImageServiceTest extends IntegrationTestCase
 
     public function test_get_thumbnail_url_throws_exception_when_image_not_found(): void
     {
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('Image not found: 99999');
+        $nonExistentId = (string) Str::uuid();
 
-        $this->imageService->getThumbnailUrl(99999);
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage("Image not found: {$nonExistentId}");
+
+        $this->imageService->getThumbnailUrl($nonExistentId);
+    }
+
+    // ============================================================
+    // INVERSE RELATION TESTS
+    // ============================================================
+
+    public function test_sync_inverse_relation_links_light_and_dark_images(): void
+    {
+        // Arrange: Créer une image dark
+        $darkFile = UploadedFile::fake()->image('policy-dark.jpg', 800, 600);
+        $darkImage = $this->imageService->upload($darkFile, $this->user, null, ImageType::BANNER);
+
+        // Act: Créer une image light
+        $lightFile = UploadedFile::fake()->image('policy-light.jpg', 800, 600);
+        $lightImage = $this->imageService->upload($lightFile, $this->user, null, ImageType::BANNER);
+
+        // Assert: Les deux images sont liées
+        $darkImage->refresh();
+        $lightImage->refresh();
+
+        $this->assertEquals($lightImage->id, $darkImage->inverse_image_id);
+        $this->assertEquals($darkImage->id, $lightImage->inverse_image_id);
+    }
+
+    public function test_sync_inverse_relation_does_not_link_non_variant_images(): void
+    {
+        // Arrange: Créer une image sans suffixe light/dark
+        $file = UploadedFile::fake()->image('policy.jpg', 800, 600);
+        $image = $this->imageService->upload($file, $this->user, null, ImageType::BANNER);
+
+        // Assert: Pas de relation inverse
+        $image->refresh();
+        $this->assertNull($image->inverse_image_id);
+    }
+
+    public function test_sync_inverse_relation_cleans_up_when_counterpart_deleted(): void
+    {
+        // Arrange: Créer les deux images
+        $darkFile = UploadedFile::fake()->image('policy-dark.jpg', 800, 600);
+        $darkImage = $this->imageService->upload($darkFile, $this->user, null, ImageType::BANNER);
+
+        $lightFile = UploadedFile::fake()->image('policy-light.jpg', 800, 600);
+        $lightImage = $this->imageService->upload($lightFile, $this->user, null, ImageType::BANNER);
+
+        // Act: Supprimer l'image dark
+        $this->imageService->delete($darkImage->id);
+
+        // Assert: La relation est nettoyée
+        $lightImage->refresh();
+        $this->assertNull($lightImage->inverse_image_id);
+    }
+
+    public function test_sync_inverse_relation_works_with_upload_multiple(): void
+    {
+        // Arrange: Créer les deux fichiers
+        $files = [
+            UploadedFile::fake()->image('policy-dark.jpg', 800, 600),
+            UploadedFile::fake()->image('policy-light.jpg', 800, 600),
+        ];
+
+        // Act: Upload multiple
+        $images = $this->imageService->uploadMultiple($files, $this->user, null, ImageType::BANNER);
+
+        // Assert: Les deux images sont liées
+        $this->assertCount(2, $images);
+
+        $darkImage = $images->get(0);
+        $lightImage = $images->get(1);
+
+        $this->assertStringContainsString('dark', $darkImage->original_filename);
+        $this->assertStringContainsString('light', $lightImage->original_filename);
+
+        $darkImage->refresh();
+        $lightImage->refresh();
+
+        $this->assertEquals($lightImage->id, $darkImage->inverse_image_id);
+        $this->assertEquals($darkImage->id, $lightImage->inverse_image_id);
     }
 }
