@@ -16,7 +16,7 @@ use AndyDefer\PhpVo\ValueObjects\DateTimeVO;
 /**
  * Data transfer object for Image API responses.
  *
- * @property-read int $id
+ * @property-read string $id
  * @property-read ImagePathVO $path
  * @property-read string $filename
  * @property-read string $originalFilename
@@ -62,7 +62,7 @@ final class ImageData extends AbstractData
         public readonly bool $isPrimary,
         public readonly bool $isProcessed,
         public readonly ?int $inverseImageId,
-        public readonly StringTypedCollection $inverseImageIds,
+        public readonly ?StringTypedCollection $inverseImageIds,
         public readonly ?string $uploadedByType,
         public readonly ?int $uploadedById,
         public readonly DateTimeVO $createdAt,

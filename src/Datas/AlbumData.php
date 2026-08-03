@@ -33,7 +33,7 @@ use AndyDefer\PhpVo\ValueObjects\SlugVO;
 final class AlbumData extends AbstractData
 {
     public function __construct(
-        public readonly int $id,
+        public readonly string $id,
         public readonly string $name,
         public readonly SlugVO $slug,
         public readonly ?string $description,
@@ -44,7 +44,7 @@ final class AlbumData extends AbstractData
         public readonly ?string $albumableType,
         public readonly ?int $albumableId,
         public readonly int $imageCount,
-        public readonly ImageDataCollection $images,
+        public readonly ?ImageDataCollection $images,
         public readonly ?ImageData $coverImage,
         public readonly DateTimeVO $createdAt,
         public readonly DateTimeVO $updatedAt,
