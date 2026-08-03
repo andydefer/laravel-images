@@ -157,6 +157,19 @@ final class Image extends Model
     }
 
     /**
+     * Get the path of the inverse image (dark/light variant).
+     * If no inverse image exists, returns null.
+     *
+     * @return Attribute<ImagePathVO|null, never>
+     */
+    protected function inversedImagePath(): Attribute
+    {
+        return Attribute::make(
+            get: fn (): ?ImagePathVO => $this->inverseImage?->path
+        );
+    }
+
+    /**
      * Get the metadata attribute as an ImageMetadataVO.
      *
      * @return Attribute<ImageMetadataVO, never>

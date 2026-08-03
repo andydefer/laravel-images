@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace AndyDefer\LaravelImages\Datas\Collections;
+namespace AndyDefer\LaravelImages\Collections;
 
 use AndyDefer\DomainStructures\Abstracts\AbstractTypedCollection;
 use AndyDefer\LaravelImages\Datas\ImageData;
@@ -33,7 +33,7 @@ final class ImageDataCollection extends AbstractTypedCollection
      */
     public function getPrimary(): self
     {
-        return $this->filter(fn (ImageData $image) => $image->is_primary === true);
+        return $this->filter(fn (ImageData $image) => $image->isPrimary === true);
     }
 
     /**

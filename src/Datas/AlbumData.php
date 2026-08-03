@@ -7,7 +7,7 @@ namespace AndyDefer\LaravelImages\Datas;
 use AndyDefer\DomainStructures\Abstracts\AbstractData;
 use AndyDefer\LaravelCluster\Enums\BinaryChoice;
 use AndyDefer\LaravelCluster\ValueObjects\ClusterVO;
-use AndyDefer\LaravelImages\Datas\Collections\ImageDataCollection;
+use AndyDefer\LaravelImages\Collections\ImageDataCollection;
 use AndyDefer\PhpVo\ValueObjects\DateTimeVO;
 use AndyDefer\PhpVo\ValueObjects\SlugVO;
 
@@ -37,12 +37,12 @@ final class AlbumData extends AbstractData
         public readonly string $name,
         public readonly SlugVO $slug,
         public readonly ?string $description,
-        public readonly ?int $coverImageId,
+        public readonly ?string $coverImageId,
         public readonly BinaryChoice $isPublic,
         public readonly BinaryChoice $isFeatured,
         public readonly ?ClusterVO $metadata,
         public readonly ?string $albumableType,
-        public readonly ?int $albumableId,
+        public readonly ?string $albumableId,
         public readonly int $imageCount,
         public readonly ?ImageDataCollection $images,
         public readonly ?ImageData $coverImage,

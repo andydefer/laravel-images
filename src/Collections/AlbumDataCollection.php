@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace AndyDefer\LaravelImages\Datas\Collections;
+namespace AndyDefer\LaravelImages\Collections;
 
 use AndyDefer\DomainStructures\Abstracts\AbstractTypedCollection;
 use AndyDefer\LaravelCluster\Enums\BinaryChoice;
@@ -25,7 +25,7 @@ final class AlbumDataCollection extends AbstractTypedCollection
      */
     public function getPublic(): self
     {
-        return $this->filter(fn (AlbumData $album) => $album->is_public === BinaryChoice::YES);
+        return $this->filter(fn (AlbumData $album) => $album->isPublic === BinaryChoice::YES);
     }
 
     /**
@@ -33,7 +33,7 @@ final class AlbumDataCollection extends AbstractTypedCollection
      */
     public function getFeatured(): self
     {
-        return $this->filter(fn (AlbumData $album) => $album->is_featured === BinaryChoice::YES);
+        return $this->filter(fn (AlbumData $album) => $album->isFeatured === BinaryChoice::YES);
     }
 
     /**
@@ -41,6 +41,6 @@ final class AlbumDataCollection extends AbstractTypedCollection
      */
     public function filterByAlbumableType(string $albumableType): self
     {
-        return $this->filter(fn (AlbumData $album) => $album->albumable_type === $albumableType);
+        return $this->filter(fn (AlbumData $album) => $album->albumableType === $albumableType);
     }
 }

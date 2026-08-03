@@ -136,7 +136,7 @@ return new class extends Migration
     private function addUploaderInformationColumns(Blueprint $table): void
     {
         $table->string('uploaded_by_type')->nullable();
-        $table->uuid('uploaded_by_id')->nullable();
+        $table->string('uploaded_by_id')->nullable();
     }
 
     /**

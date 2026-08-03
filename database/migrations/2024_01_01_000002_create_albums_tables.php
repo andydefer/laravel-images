@@ -123,7 +123,7 @@ return new class extends Migration
     private function addPolymorphicRelationColumns(Blueprint $table): void
     {
         $table->string('albumable_type')->nullable()->index();
-        $table->uuid('albumable_id')->nullable()->index();
+        $table->string('albumable_id')->nullable()->index();
     }
 
     /**
