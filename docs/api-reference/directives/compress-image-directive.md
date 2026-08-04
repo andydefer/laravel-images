@@ -2,7 +2,7 @@
 
 ## Description
 
-Directive de compression d'images qui utilise les outils système `pngquant` et `jpegoptim` pour réduire la taille des fichiers PNG, JPG et JPEG. Elle prend en charge la compression récursive, la simulation (dry-run), et plusieurs options de qualité.
+La directive `CompressImagesDirective` compresse les images PNG et JPG/JPEG en utilisant les outils système `pngquant` et `jpegoptim`. Elle préserve la structure des répertoires et peut traiter récursivement les sous-dossiers.
 
 ## Hiérarchie / Implémentations
 
@@ -11,123 +11,109 @@ AbstractDirective
     └── CompressImagesDirective
 ```
 
+**Interfaces :** `DirectiveInterface` (via `AbstractDirective`)
+
 ## Rôle principal
 
-Fournit une interface CLI pour compresser des images en masse. La directive orchestre la découverte des fichiers, l'appel aux outils système, et le suivi des statistiques de compression (taille avant/après, économie réalisée).
+Optimiser la taille des images en appliquant une compression sans perte ou avec perte contrôlée, tout en conservant l'architecture des dossiers source dans le répertoire de destination.
+
+## DETAILS
+
+[Voir la classe CompressImagesDirective](https://github.com/andydefer/laravel-images/blob/main/src/Directives/CompressImagesDirective.php)
+
+## Prérequis système
+
+Les outils suivants doivent être installés sur le système :
+
+```bash
+sudo apt install pngquant jpegoptim
+```
 
 ## API / Méthodes publiques
 
 ### `getSignature(): string`
 
-Retourne la signature de la commande avec tous les paramètres et leurs commentaires.
+| Paramètre | Type | Description |
+|-----------|------|-------------|
+| Aucun | - | - |
 
-**Retourne :** `string` - La signature complète
+**Retourne :** `string` - La signature de la commande CLI
 
 **Exemple :**
 ```php
-public function getSignature(): string
-{
-    return 'images:compress 
-                {source}#"Source directory containing images to compress" 
-                {destination=?}#"Destination directory (source directory if omitted)" 
-                {png-quality=45-50}#"PNG quality range (min-max, e.g. 30-40)" 
-                {jpg-quality=50}#"JPEG quality (0-100)" 
-                {--strip-meta}#"Remove metadata (Exif, comments, etc.)" 
-                {--recursive}#"Process subdirectories recursively" 
-                {--dry-run}#"Simulate compression without modifying files" 
-                {--force}#"Force overwrite existing files"';
-}
+$directive = new CompressImagesDirective();
+echo $directive->getSignature();
+// images:compress {source} {destination} {png-quality=45-50} {jpg-quality=50} {max-size=0} {--strip-meta} {--recursive} {--dry-run} {--force} {--skip-compressed}
 ```
 
 ---
 
 ### `getAliases(): StringTypedCollection`
 
-Retourne les alias de la commande.
+| Paramètre | Type | Description |
+|-----------|------|-------------|
+| Aucun | - | - |
 
-**Retourne :** `StringTypedCollection` - Collection des alias
+**Retourne :** `StringTypedCollection` - Collection contenant les alias de la commande
 
 **Exemple :**
 ```php
-public function getAliases(): StringTypedCollection
-{
-    return StringTypedCollection::from(['imc']);
-}
+$aliases = $directive->getAliases(); // ['imc']
 ```
 
 ---
 
 ### `getDescription(): string`
 
-Retourne la description de la commande.
+| Paramètre | Type | Description |
+|-----------|------|-------------|
+| Aucun | - | - |
 
-**Retourne :** `string` - Description
+**Retourne :** `string` - Description de la directive
 
 **Exemple :**
 ```php
-public function getDescription(): string
-{
-    return 'Compress PNG and JPG/JPEG images using pngquant and jpegoptim';
-}
+echo $directive->getDescription();
+// "Compress PNG and JPG/JPEG images using pngquant and jpegoptim"
 ```
 
 ---
 
 ### `beforeExecute(): void`
 
-Prépare l'exécution : récupère les services, vérifie la source et les dépendances.
+Méthode d'initialisation appelée avant l'exécution principale.
 
-**Exceptions :** `RuntimeException` - Source introuvable ou dépendances manquantes
+- Initialise les services (`FileSystemInterface`)
+- Vérifie l'existence du répertoire source
+- Vérifie la présence des outils système
 
-**Exemple :**
-```php
-protected function beforeExecute(): void
-{
-    $this->info('📷 Starting image compression...');
-    $app = $this->getApplication();
-    $this->fileSystem = $app->make(FileSystemInterface::class);
-    $this->storage = $app->make(ImageStorageInterface::class);
-    // ...
-}
-```
+**Exceptions :** `RuntimeException` - Si le répertoire source n'existe pas ou si les outils sont manquants
 
 ---
 
 ### `execute(): ExitCode`
 
-Exécute la compression des images. C'est la méthode principale de la directive.
+Point d'entrée principal de la directive.
 
-**Retourne :** `ExitCode` - Code de sortie (SUCCESS ou RUNTIME_ERROR)
+1. Construit la configuration à partir des arguments CLI
+2. Scanne le répertoire source pour trouver les images
+3. Applique les filtres (taille, compression déjà effectuée)
+4. Exécute la compression (sauf en mode dry-run)
+5. Affiche un résumé des opérations
 
-**Exemple :**
-```php
-protected function execute(): ExitCode
-{
-    $source = $this->getArgument('source');
-    $destination = $this->getArgument('destination') ?? $source;
-    // ... logique de compression
-    return ExitCode::SUCCESS;
-}
-```
+**Retourne :** `ExitCode::SUCCESS` ou `ExitCode::FAILURE`
+
+**Exceptions :** `RuntimeException` - En cas d'erreur lors de la compression
 
 ---
 
 ### `afterExecute(ExitCode $exitCode): void`
 
-Nettoyage après l'exécution.
+Méthode appelée après l'exécution, affiche un message de confirmation.
 
 | Paramètre | Type | Description |
 |-----------|------|-------------|
 | `$exitCode` | `ExitCode` | Code de sortie de l'exécution |
-
-**Exemple :**
-```php
-protected function afterExecute(ExitCode $exitCode): void
-{
-    $this->newLine();
-    $this->info('✅ Compression completed');
-}
-```
 
 ---
 
@@ -135,43 +121,78 @@ protected function afterExecute(ExitCode $exitCode): void
 
 ### Cas 1 : Compression simple
 
-Compression des images dans un dossier avec les paramètres par défaut.
-
 ```bash
-./bin/images images:compress storage/app/public/images
+./bin/afya images:compress storage/app/public/images storage/app/public/images/compressed
 ```
 
-### Cas 2 : Compression avec destination personnalisée
+Compresse toutes les images trouvées dans `images` et les sauvegarde dans `compressed` (sans structure de dossiers).
 
-Compression des images vers un dossier de destination spécifique.
+---
 
-```bash
-./bin/images images:compress storage/app/public/images storage/app/public/compressed
-```
-
-### Cas 3 : Compression récursive avec paramètres avancés
-
-Compression récursive avec qualités personnalisées et suppression des métadonnées.
+### Cas 2 : Compression récursive avec conservation de la structure
 
 ```bash
-./bin/images images:compress storage/app/public/images --recursive --strip-meta --png-quality=30-40 --jpg-quality=40
+./bin/afya images:compress storage/app/public/images storage/app/public/images/compressed --recursive
 ```
 
-### Cas 4 : Simulation (dry-run)
+Préserve l'architecture des sous-dossiers. Exemple :
+- `images/avatars/patient.jpg` → `compressed/avatars/patient.jpg`
+- `images/banners/hero.png` → `compressed/banners/hero.png`
 
-Vérification des fichiers qui seraient compressés sans effectuer de modifications.
+---
+
+### Cas 3 : Simulation (dry-run)
 
 ```bash
-./bin/images images:compress storage/app/public/images --dry-run
+./bin/afya images:compress storage/app/public/images storage/app/public/images/compressed --recursive --dry-run
 ```
 
-### Cas 5 : Utilisation de l'alias
+Affiche les fichiers qui seraient compressés sans effectuer de modification.
 
-Utilisation de l'alias `imc` pour une exécution plus rapide.
+---
+
+### Cas 4 : Compression avec qualités personnalisées
 
 ```bash
-./bin/images imc storage/app/public/images --recursive
+# PNG avec qualité 30-40
+./bin/afya images:compress storage/app/public/images storage/app/public/images/compressed --png-quality=30-40
+
+# JPG avec qualité 40
+./bin/afya images:compress storage/app/public/images storage/app/public/images/compressed --jpg-quality=40
 ```
+
+---
+
+### Cas 5 : Ignorer les images déjà compressées
+
+```bash
+./bin/afya images:compress storage/app/public/images storage/app/public/images/compressed --recursive --skip-compressed
+```
+
+Évite de recompresser les images déjà optimisées.
+
+---
+
+### Cas 6 : Combinaison de flags
+
+```bash
+./bin/afya images:compress storage/app/public/images storage/app/public/images/compressed --recursive --strip-meta --force --skip-compressed
+```
+
+- `--recursive` : Traite les sous-dossiers
+- `--strip-meta` : Supprime les métadonnées (Exif)
+- `--force` : Force l'écrasement
+- `--skip-compressed` : Ignore les images déjà compressées
+
+---
+
+### Cas 7 : Ignorer les images de petite taille
+
+```bash
+./bin/afya images:compress storage/app/public/images storage/app/public/images/compressed --recursive max-size=20
+```
+
+Ignore les images de moins de 20 KB (ne les compresse pas).
 
 ---
 
@@ -179,99 +200,48 @@ Utilisation de l'alias `imc` pour une exécution plus rapide.
 
 | Situation | Exception | Message |
 |-----------|-----------|---------|
-| Source introuvable | `RuntimeException` | `Source directory not found: {source}` |
-| Outils manquants | `RuntimeException` | `Required tools not installed: pngquant, jpegoptim` |
-| Échec de compression | `RuntimeException` | `Error compressing {file}: {error}` |
-
----
+| Répertoire source inexistant | `RuntimeException` | `Source directory not found: {$source}` |
+| Outils non installés | `RuntimeException` | `Missing dependencies: pngquant, jpegoptim` |
+| Échec de compression PNG | Avertissement | `⚠️ Error compressing {$source}: {$error}` |
+| Échec de compression JPG | Avertissement | `⚠️ Error compressing {$source}: {$error}` |
 
 ## Intégration
 
-La directive s'intègre avec :
-
-- **FileSystemInterface** : Opérations système de fichiers
-- **ImageStorageInterface** : Stockage des images
-- **AbstractDirective** : Classe de base des directives
-- **Symfony Process** : Exécution des commandes système
-
-**Dépendances système :**
-- `pngquant` - Compression PNG
-- `jpegoptim` - Compression JPG/JPEG
-
----
+La directive utilise :
+- `FileSystemInterface` pour toutes les opérations sur le système de fichiers
+- `Process` de Symfony pour exécuter les commandes système
+- `AbstractDirective` pour l'infrastructure CLI
 
 ## Performance
 
-- La compression est exécutée via des processus système (non bloquants)
-- Les fichiers sont traités séquentiellement pour éviter la surcharge mémoire
-- Les statistiques (taille avant/après) sont collectées en temps réel
-
-**Bonnes pratiques :**
-- Utiliser `--dry-run` pour évaluer l'impact avant exécution
-- Ajuster les qualités selon les besoins (PNG: 30-40, JPG: 40-50 pour le web)
-- Utiliser `--strip-meta` pour réduire davantage la taille
-
----
+- **Complexité** : O(n) où n est le nombre d'images
+- **Facteurs impactant** :
+  - Taille des images
+  - Qualité demandée (plus basse = plus rapide)
+  - Nombre de fichiers
+- **Optimisation** : Le flag `--skip-compressed` évite de retraiter les images déjà optimisées
 
 ## Compatibilité
 
 | Version PHP | Support |
 |-------------|---------|
 | PHP 8.1+ | ✅ Complet |
-
-| Outil système | Support |
-|---------------|---------|
-| pngquant | ✅ Requis |
-| jpegoptim | ✅ Requis |
-
-| Environnement | Support |
-|---------------|---------|
-| Linux | ✅ Complet |
-| macOS | ✅ Complet |
-| Windows | ⚠️ Nécessite installation manuelle |
-
----
+| PHP 8.0 | ✅ Complet |
 
 ## Exemple complet
 
 ```bash
-#!/bin/bash
+# Compression complète de toutes les images avec structure
+./bin/afya images:compress storage/app/public/images storage/app/public/images/compressed --recursive --strip-meta --force
 
-# 1. Vérifier que les outils sont installés
-which pngquant || sudo apt install pngquant
-which jpegoptim || sudo apt install jpegoptim
-
-# 2. Compresser un dossier d'images avec les paramètres optimisés pour le web
-./bin/images images:compress \
-    storage/app/public/images \
-    storage/app/public/compressed \
-    --png-quality=30-40 \
-    --jpg-quality=40 \
-    --strip-meta \
-    --recursive
-
-# 3. Sortie attendue :
-# 📷 Starting image compression...
-# ✅ Source directory: storage/app/public/images
-# 📁 Found 42 images to process
-#    ✅ images/test/photo1.jpg - saved 120.5 KB (65.2%)
-#    ✅ images/test/photo2.png - saved 45.2 KB (52.8%)
-#    ...
-# 📊 Summary:
-#    📁 Files processed: 42
-#    📦 Size before: 15.24 MB
-#    📦 Size after: 5.67 MB
-#    💾 Space saved: 9.57 MB (62.8%)
-# ✅ Compression completed
+# Utilisation avec l'alias
+./bin/afya imc storage/app/public/images storage/app/public/images/compressed --recursive
 ```
-
----
 
 ## Voir aussi
 
-- `AbstractDirective` - Classe de base des directives
-- `FileSystemInterface` - Interface système de fichiers
-- `ImageStorageInterface` - Interface de stockage des images
-- `DirectiveTestingService` - Service de test des directives
-- [pngquant documentation](https://pngquant.org/)
-- [jpegoptim documentation](https://github.com/tjko/jpegoptim)
+- `ScanImagesDirective` - Scan des images
+- `SeedImagesDirective` - Seeding des images en base de données
+- `ImageExtension` - Types d'extensions supportées
+- `FileSystemInterface` - Interface pour les opérations système
+---

@@ -7,7 +7,6 @@ namespace AndyDefer\LaravelImages\Directives;
 use AndyDefer\Directive\AbstractDirective;
 use AndyDefer\Directive\Enums\ExitCode;
 use AndyDefer\DomainStructures\Collections\Utility\StringTypedCollection;
-use AndyDefer\LaravelImages\Contracts\Storage\ImageStorageInterface;
 use AndyDefer\PhpServices\Contracts\FileSystemInterface;
 use Illuminate\Support\Collection;
 use RuntimeException;
@@ -29,13 +28,11 @@ final class CompressImagesDirective extends AbstractDirective
 
     private FileSystemInterface $fileSystem;
 
-    private ImageStorageInterface $storage;
-
     public function getSignature(): string
     {
         return 'images:compress 
                 {source}#"Source directory containing images to compress" 
-                {destination=?}#"Destination directory (source directory if omitted)" 
+                {destination}#"Destination directory" 
                 {png-quality=45-50}#"PNG quality range (min-max, e.g. 30-40)" 
                 {jpg-quality=50}#"JPEG quality (0-100)" 
                 {max-size=0}#"Skip images smaller than this size (in KB, 0 = disabled)" 
@@ -82,15 +79,16 @@ final class CompressImagesDirective extends AbstractDirective
         $this->info('📁 Found '.$files->count().' images to process');
         $this->newLine();
 
+        // ✅ Vérifier dry-run AVANT de créer le dossier de destination
         if ($config['dryRun']) {
             $this->performDryRun($files);
 
             return ExitCode::SUCCESS;
         }
 
+        // ✅ Continuer seulement si ce n'est pas un dry-run
         $this->ensureDestinationExists($config['destination']);
         $this->processImages($files, $config);
-
         $this->displaySummary();
 
         return ExitCode::SUCCESS;
@@ -106,7 +104,6 @@ final class CompressImagesDirective extends AbstractDirective
     {
         $app = $this->getApplication();
         $this->fileSystem = $app->make(FileSystemInterface::class);
-        $this->storage = $app->make(ImageStorageInterface::class);
     }
 
     private function ensureDependenciesAreInstalled(): void
@@ -135,14 +132,6 @@ final class CompressImagesDirective extends AbstractDirective
 
     private function ensureSourceExists(string $source): void
     {
-        $fullPath = $this->storage->getFullPath($source);
-
-        if ($this->fileSystem->exists($fullPath)) {
-            $this->info("✅ Source directory: {$source}");
-
-            return;
-        }
-
         if ($this->fileSystem->exists($source)) {
             $this->info("✅ Source directory: {$source}");
 
@@ -150,18 +139,13 @@ final class CompressImagesDirective extends AbstractDirective
         }
 
         $this->error("❌ Source directory not found: {$source}");
-        $this->line('💡 Tip: The path should be relative to the storage disk.');
-        $this->line('   Example: "images" instead of "storage/app/public/images"');
-
         throw new RuntimeException("Source directory not found: {$source}");
     }
 
     private function ensureDestinationExists(string $destination): void
     {
-        $fullPath = $this->storage->getFullPath($destination);
-
-        if (! $this->fileSystem->exists($fullPath)) {
-            $this->fileSystem->ensureDirectoryExists($fullPath);
+        if (! $this->fileSystem->exists($destination)) {
+            $this->fileSystem->ensureDirectoryExists($destination);
             $this->info("📁 Created destination directory: {$destination}");
         }
     }
@@ -172,7 +156,7 @@ final class CompressImagesDirective extends AbstractDirective
 
         return [
             'source' => $this->getArgument('source'),
-            'destination' => $this->getArgument('destination') ?? $this->getArgument('source'),
+            'destination' => $this->getArgument('destination'),
             'pngQuality' => $this->getArgument('png-quality') ?? self::PNG_QUALITY_DEFAULT,
             'jpgQuality' => (int) ($this->getArgument('jpg-quality') ?? self::JPG_QUALITY_DEFAULT),
             'maxSize' => $maxSizeKB * 1024,
@@ -197,28 +181,11 @@ final class CompressImagesDirective extends AbstractDirective
 
     private function findImages(string $source, bool $recursive): Collection
     {
-        $basePath = $this->resolveBasePath($source);
-
         $files = $recursive
-            ? $this->findImagesRecursively($basePath)
-            : $this->findImagesInDirectory($basePath);
+            ? $this->findImagesRecursively($source)
+            : $this->findImagesInDirectory($source);
 
-        return collect($files)->filter(fn (string $path): bool => is_file($path));
-    }
-
-    private function resolveBasePath(string $source): string
-    {
-        $storagePath = $this->storage->getFullPath($source);
-
-        if ($this->fileSystem->exists($storagePath)) {
-            return $storagePath;
-        }
-
-        if ($this->fileSystem->exists($source)) {
-            return $source;
-        }
-
-        return $storagePath;
+        return collect($files)->filter(fn (string $path): bool => $this->fileSystem->isFile($path));
     }
 
     private function findImagesInDirectory(string $directory): array
@@ -389,7 +356,7 @@ final class CompressImagesDirective extends AbstractDirective
         $extension = strtolower(pathinfo($file, PATHINFO_EXTENSION));
         $relativePath = $this->getRelativePath($file);
 
-        $destinationPath = $this->storage->getFullPath($config['destination'].'/'.$relativePath);
+        $destinationPath = $config['destination'].'/'.$relativePath;
         $destinationDir = dirname($destinationPath);
 
         if (! $this->fileSystem->exists($destinationDir)) {
@@ -434,7 +401,7 @@ final class CompressImagesDirective extends AbstractDirective
         $process->run();
 
         if (! $process->isSuccessful() && $process->getErrorOutput()) {
-            $this->warn("⚠️ Error compressing {$source}: ".$process->getErrorOutput());
+            $this->getConsole()->alertWarning("⚠️ Error compressing {$source}: ".$process->getErrorOutput());
         }
     }
 
@@ -459,7 +426,7 @@ final class CompressImagesDirective extends AbstractDirective
         }
 
         if (! $process->isSuccessful() && $process->getErrorOutput()) {
-            $this->warn("⚠️ Error compressing {$source}: ".$process->getErrorOutput());
+            $this->getConsole()->alertWarning("⚠️ Error compressing {$source}: ".$process->getErrorOutput());
         }
     }
 
@@ -567,46 +534,22 @@ final class CompressImagesDirective extends AbstractDirective
      */
     private function normalizePath(string $path): string
     {
-        // Remplacer les antislashs par des slashes
         $path = str_replace('\\', '/', $path);
-
-        // Si le chemin commence par "storage/", le convertir en chemin absolu
-        if (str_starts_with($path, 'storage/')) {
-            $path = base_path($path);
-        }
-
-        // S'assurer que le chemin se termine par un slash pour les répertoires
-        if (is_dir($path) && ! str_ends_with($path, '/')) {
-            $path .= '/';
-        }
 
         return $path;
     }
 
     /**
-     * Retourne le chemin relatif en supprimant "storage/app/public/images/"
-     * Ex: storage/app/public/images/gallery/clinics/photo.jpg → gallery/clinics/photo.jpg
+     * Retourne le chemin relatif par rapport à la source.
      */
     private function getRelativePath(string $file): string
     {
-        // Normaliser le chemin du fichier
+        $source = $this->getArgument('source');
+        $normalizedSource = $this->normalizePath($source);
         $normalizedFile = $this->normalizePath($file);
 
-        $basePath = $this->normalizePath(storage_path('app/public/images/'));
-
-        if (str_starts_with($normalizedFile, $basePath)) {
-            return ltrim(substr($normalizedFile, strlen($basePath)), '/');
-        }
-
-        $basePath2 = $this->normalizePath(storage_path('app/public/'));
-
-        if (str_starts_with($normalizedFile, $basePath2)) {
-            $relative = ltrim(substr($normalizedFile, strlen($basePath2)), '/');
-            if (str_starts_with($relative, 'images/')) {
-                return substr($relative, 7);
-            }
-
-            return $relative;
+        if (str_starts_with($normalizedFile, $normalizedSource.'/')) {
+            return ltrim(substr($normalizedFile, strlen($normalizedSource) + 1), '/');
         }
 
         return basename($file);

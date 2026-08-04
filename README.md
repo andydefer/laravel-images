@@ -458,8 +458,10 @@ use AndyDefer\PhpServices\Services\FileSystemService;
 
 // Création du stockage
 $fileSystem = new FileSystemService();
-$storage = new LocalImageStorage($fileSystem, 'public');
+$storage = new LocalImageStorage($fileSystem);
 ```
+
+**Note :** Le stockage utilise des chemins relatifs au dossier courant d'exécution. Aucun préfixe n'est ajouté automatiquement.
 
 ### 7.2 Opérations de stockage
 
@@ -483,9 +485,6 @@ $storage->delete($path);
 
 // Supprimer plusieurs fichiers
 $storage->deleteMultiple($files);
-
-// Changer le chemin de base
-$storage->setBasePath('private');
 ```
 
 ---
@@ -504,20 +503,20 @@ Le package fournit deux directives CLI pour la gestion des images :
 ### 8.2 Commande de compression
 
 ```bash
-./bin/images images:compress {source} {destination?} {--options}
+./bin/images images:compress {source} {destination} {--options}
 ```
 
 **Paramètres :**
 
 | Paramètre | Description |
 |-----------|-------------|
-| `{source}` | Dossier source contenant les images à compresser (relatif au disque de stockage) |
-| `{destination?}` | Dossier de destination (source si omis) |
+| `{source}` | Dossier source contenant les images à compresser |
+| `{destination}` | Dossier de destination (obligatoire) |
 | `{png-quality=45-50}` | Plage de qualité PNG (min-max, ex: 30-40) |
 | `{jpg-quality=50}` | Qualité JPEG (0-100) |
 | `{max-size=0}` | Ignorer les images plus petites que N KB (0 = désactivé) |
 | `{--strip-meta}` | Supprime les métadonnées (Exif, commentaires, etc.) |
-| `{--recursive}` | Traite les sous-dossiers récursivement |
+| `{--recursive}` | Traite les sous-dossiers récursivement et conserve la structure |
 | `{--dry-run}` | Simule la compression sans modifier les fichiers |
 | `{--force}` | Force l'écrasement des fichiers existants |
 | `{--skip-compressed}` | Ignore les images déjà compressées |
@@ -526,40 +525,55 @@ Le package fournit deux directives CLI pour la gestion des images :
 
 ```bash
 # Compression simple
-./bin/images images:compress storage/app/public/images
-
-# Compression avec destination personnalisée
 ./bin/images images:compress storage/app/public/images storage/app/public/compressed
 
-# Compression récursive avec paramètres avancés
-./bin/images images:compress storage/app/public/images --recursive --strip-meta --png-quality=30-40 --jpg-quality=40
+# Compression récursive avec conservation de la structure
+./bin/images images:compress storage/app/public/images storage/app/public/compressed --recursive
+
+# Compression avec paramètres avancés
+./bin/images images:compress storage/app/public/images storage/app/public/compressed --recursive --strip-meta --png-quality=30-40 --jpg-quality=40
 
 # Ignorer les images déjà compressées
-./bin/images images:compress storage/app/public/images --skip-compressed
+./bin/images images:compress storage/app/public/images storage/app/public/compressed --skip-compressed
 
 # Ignorer les images plus petites que 50KB
-./bin/images images:compress storage/app/public/images max-size=50
+./bin/images images:compress storage/app/public/images storage/app/public/compressed max-size=50
 
 # Simulation (dry-run)
-./bin/images images:compress storage/app/public/images --dry-run
+./bin/images images:compress storage/app/public/images storage/app/public/compressed --dry-run --recursive
 
 # Utilisation de l'alias
-./bin/images imc storage/app/public/images --recursive
+./bin/images imc storage/app/public/images storage/app/public/compressed --recursive
+```
+
+**Conservation de la structure :**
+
+Avec l'option `--recursive`, la structure des dossiers est préservée :
+
+```
+Source :                          Destination :
+storage/app/public/images/        storage/app/public/compressed/
+├── avatars/                      ├── avatars/
+│   └── patient.jpg               │   └── patient.jpg
+├── banners/                      ├── banners/
+│   └── hero.png                  │   └── hero.png
+└── gallery/                      └── gallery/
+    └── photo.jpg                     └── photo.jpg
 ```
 
 ### 8.3 Commande de scan
 
 ```bash
-./bin/images images:scan {source} {depth=0} {output=json} {extensions*} {excludes*} {--options}
+./bin/images images:scan {source} {output} {depth=0} {extensions*} {excludes*} {--options}
 ```
 
 **Paramètres :**
 
 | Paramètre | Description |
 |-----------|-------------|
-| `{source}` | Dossier source à scanner (relatif au disque de stockage) |
+| `{source}` | Dossier source à scanner |
+| `{output}` | Fichier de sortie (.json ou .php) |
 | `{depth=0}` | Profondeur maximale de scan (0 = illimitée) |
-| `{::output->[json,array]=json}` | Format de sortie : `json` ou `array` (PHP) |
 | `{extensions*}` | Extensions d'images à inclure (ex: `png jpg webp` ou `[png,jpg]`) |
 | `{excludes*}` | Dossiers à exclure du scan |
 | `{--hash}` | Inclut le hash MD5 de chaque image |
@@ -569,25 +583,31 @@ Le package fournit deux directives CLI pour la gestion des images :
 
 ```bash
 # Scan simple avec sortie JSON
-./bin/images images:scan images
+./bin/images images:scan storage/app/public/images scan-result.json
 
-# Scan avec profondeur limitée et sortie PHP array
-./bin/images images:scan images 2 array
+# Scan avec profondeur limitée
+./bin/images images:scan storage/app/public/images scan-depth.json 1
 
-# Scan avec filtrage d'extensions et exclusion de dossiers
-./bin/images images:scan images 0 json [png,jpg] [compressed,thumbnails]
+# Scan avec filtrage d'extensions
+./bin/images images:scan storage/app/public/images scan-ext.json 0 [png,jpg]
+
+# Scan avec exclusion de dossiers
+./bin/images images:scan storage/app/public/images scan-exclude.json 0 [] [compressed,thumbnails]
 
 # Scan avec génération de hash MD5
-./bin/images images:scan images --hash
+./bin/images images:scan storage/app/public/images scan-hash.json --hash
 
 # Scan avec exclusion des images compressées
-./bin/images images:scan images --exclude-compressed
+./bin/images images:scan storage/app/public/images scan.json --exclude-compressed
+
+# Sortie PHP array
+./bin/images images:scan storage/app/public/images scan-result.php
 
 # Utilisation de l'alias
-./bin/images ims images
+./bin/images ims storage/app/public/images scan-result.json
 
 # Combinaison de toutes les options
-./bin/images images:scan images 2 json [png,jpg] [compressed,thumbnails] --hash --exclude-compressed
+./bin/images images:scan storage/app/public/images scan-all.json 1 [png,jpg] [compressed,thumbnails] --hash
 ```
 
 **Exemple de sortie JSON :**
@@ -595,7 +615,7 @@ Le package fournit deux directives CLI pour la gestion des images :
 ```json
 [
   {
-    "path": "images/avatars/user1.png",
+    "path": "storage/app/public/images/avatars/user1.png",
     "filename": "user1.png",
     "original_filename": "user1.png",
     "extension": "png",
@@ -608,14 +628,14 @@ Le package fournit deux directives CLI pour la gestion des images :
 ]
 ```
 
-**Exemple de sortie PHP (array) :**
+**Exemple de sortie PHP :**
 
 ```php
 <?php
 
 return [
     [
-        'path' => 'images/avatars/user1.png',
+        'path' => 'storage/app/public/images/avatars/user1.png',
         'filename' => 'user1.png',
         'original_filename' => 'user1.png',
         'extension' => 'png',
@@ -653,17 +673,17 @@ La directive de compression détecte automatiquement les images déjà compress�
 #### Compression
 
 ```bash
-$ ./bin/images images:compress images --skip-compressed
+$ ./bin/images images:compress storage/app/public/images storage/app/public/compressed --skip-compressed --recursive
 
 📷 Starting image compression...
 
-✅ Source directory: images
+✅ Source directory: storage/app/public/images
 📁 Found 42 images to process
 
-   ✅ images/photo1.jpg - saved 120.5 KB (65.2%)
-   ⏭️  images/photo2.png - already compressed, skipping
-   ✅ images/photo3.jpg - saved 45.2 KB (52.8%)
-   ⏭️  images/photo4.png - already compressed, skipping
+   ✅ avatars/photo1.jpg - saved 120.5 KB (65.2%)
+   ⏭️  banners/photo2.png - already compressed, skipping
+   ✅ gallery/photo3.jpg - saved 45.2 KB (52.8%)
+   ⏭️  avatars/photo4.png - already compressed, skipping
 
 ⏭️  Skipped 12 already compressed images
 
@@ -680,16 +700,16 @@ $ ./bin/images images:compress images --skip-compressed
 #### Scan
 
 ```bash
-$ ./bin/images images:scan images 2 json [png,jpg] [compressed,thumbnails] --hash
+$ ./bin/images images:scan storage/app/public/images scan-result.json 2 [png,jpg] [compressed,thumbnails] --hash
 
 🔍 Scanning images...
 
-✅ Source directory: images
-📁 Scanning: images
+✅ Source directory: storage/app/public/images
+📁 Scanning: storage/app/public/images
 
 📊 Found: 42 images
 
-💾 Output saved to: /storage/app/public/scan_result_2024-01-01_12-00-00.json
+💾 Output saved to: scan-result.json
 
 ✅ Scan completed
 ```
@@ -854,25 +874,25 @@ class ImageExportService
 
 ```bash
 # 1. Générer un inventaire complet des images
-./bin/images images:scan storage/app/public/images
+./bin/images images:scan storage/app/public/images scan-result.json
 
 # 2. Générer un inventaire avec hash MD5
-./bin/images images:scan storage/app/public/images --hash
+./bin/images images:scan storage/app/public/images scan-hash.json --hash
 
 # 3. Générer un inventaire PHP pour traitement programmatique
-./bin/images images:scan storage/app/public/images 0 array
+./bin/images images:scan storage/app/public/images scan-result.php
 
 # 4. Analyser uniquement les JPEG/PNG en excluant les dossiers compressés
-./bin/images images:scan storage/app/public/images 0 json [png,jpg] [compressed,thumbnails] --hash
+./bin/images images:scan storage/app/public/images scan-filtered.json 0 [png,jpg] [compressed,thumbnails] --hash
 
 # 5. Compresser les images après audit
-./bin/images images:compress storage/app/public/images --recursive --skip-compressed
+./bin/images images:compress storage/app/public/images storage/app/public/optimized --recursive --skip-compressed
 ```
 
 ### 9.5 Compression via CLI
 
 ```bash
-# Compression optimisée pour le web
+# Compression optimisée pour le web avec conservation de la structure
 ./bin/images images:compress storage/app/public/images storage/app/public/optimized \
     --recursive \
     --strip-meta \
@@ -1109,4 +1129,4 @@ function getThemeImage(Image $image, string $theme): ?Image
 ## Licence
 
 MIT © [Andy Defer](https://github.com/andydefer)
-```
+---

@@ -2,18 +2,24 @@
 
 ## Description
 
-La directive `ScanImagesDirective` permet de scanner récursivement un répertoire pour y trouver des images, d'extraire leurs métadonnées (chemin, nom, taille, dimensions, type MIME, etc.), et d'exporter les résultats sous forme de fichier JSON ou PHP array.
+La directive `ScanImagesDirective` scanne récursivement un répertoire pour y trouver des images, extrait leurs métadonnées (chemin, nom, taille, dimensions, type MIME, etc.) et exporte les résultats dans un fichier JSON ou PHP.
 
-## Hiérarchie
+## Hiérarchie / Implémentations
 
 ```
 AbstractDirective
     └── ScanImagesDirective
 ```
 
+**Interfaces :** `DirectiveInterface` (via `AbstractDirective`)
+
 ## Rôle principal
 
-Fournir une interface CLI pour l'analyse et l'inventaire d'images dans un projet Laravel, facilitant ainsi la gestion des assets, l'audit de contenu, et la génération de rapports sur les images présentes dans l'application.
+Cette directive sert à générer un inventaire structuré des images présentes dans un dossier, en conservant la hiérarchie des répertoires. Elle est utilisée notamment pour préparer les données avant un seeding d'images en base de données.
+
+## DETAILS
+
+[Voir la classe ScanImagesDirective](https://github.com/andydefer/laravel-images/blob/main/src/Directives/ScanImagesDirective.php)
 
 ## API / Méthodes publiques
 
@@ -21,16 +27,15 @@ Fournir une interface CLI pour l'analyse et l'inventaire d'images dans un projet
 
 | Paramètre | Type | Description |
 |-----------|------|-------------|
-| - | - | Aucun paramètre |
+| Aucun | - | - |
 
 **Retourne :** `string` - La signature de la commande CLI
 
-**Description :** Définit les arguments et options acceptés par la directive.
-
 **Exemple :**
 ```php
-$signature = $directive->getSignature();
-// 'images:scan {source}#"Source directory..." ...'
+$directive = new ScanImagesDirective();
+echo $directive->getSignature();
+// images:scan {source} {output} {depth=0} {extensions*} {excludes*} {--hash} {--exclude-compressed}
 ```
 
 ---
@@ -39,16 +44,13 @@ $signature = $directive->getSignature();
 
 | Paramètre | Type | Description |
 |-----------|------|-------------|
-| - | - | Aucun paramètre |
+| Aucun | - | - |
 
-**Retourne :** `StringTypedCollection` - Collection des alias de la commande
-
-**Description :** Retourne les alias disponibles pour la commande (`ims`).
+**Retourne :** `StringTypedCollection` - Collection contenant les alias de la commande
 
 **Exemple :**
 ```php
-$aliases = $directive->getAliases();
-// ['ims']
+$aliases = $directive->getAliases(); // ['ims']
 ```
 
 ---
@@ -57,60 +59,52 @@ $aliases = $directive->getAliases();
 
 | Paramètre | Type | Description |
 |-----------|------|-------------|
-| - | - | Aucun paramètre |
+| Aucun | - | - |
 
 **Retourne :** `string` - Description de la directive
-
-**Description :** Retourne une brève description de ce que fait la directive.
 
 **Exemple :**
 ```php
 echo $directive->getDescription();
-// 'Scan images in a directory and generate JSON/Array output with metadata'
+// "Scan images in a directory and generate JSON/Array output with metadata"
 ```
 
 ---
 
 ### `beforeExecute(): void`
 
-| Paramètre | Type | Description |
-|-----------|------|-------------|
-| - | - | Aucun paramètre |
+Méthode d'initialisation appelée avant l'exécution principale.
 
-**Retourne :** `void`
+- Initialise les services (`FileSystemInterface`)
+- Vérifie l'existence du répertoire source
 
-**Exceptions :** `RuntimeException` si le répertoire source n'existe pas
-
-**Description :** Méthode appelée avant l'exécution principale. Initialise les services et vérifie que le répertoire source existe.
+**Exceptions :** `RuntimeException` - Si le répertoire source n'existe pas
 
 ---
 
 ### `execute(): ExitCode`
 
-| Paramètre | Type | Description |
-|-----------|------|-------------|
-| - | - | Aucun paramètre |
+Point d'entrée principal de la directive.
 
-**Retourne :** `ExitCode` - `SUCCESS` ou `RUNTIME_ERROR`
+1. Construit la configuration à partir des arguments CLI
+2. Scanne le répertoire source pour trouver les images
+3. Applique les filtres (extensions, exclusion, profondeur)
+4. Formate la sortie (JSON ou PHP array)
+5. Sauvegarde le fichier de sortie
 
-**Description :** Méthode principale d'exécution qui orchestre le scan, la collecte des métadonnées et la génération du fichier de sortie.
+**Retourne :** `ExitCode::SUCCESS` ou `ExitCode::FAILURE`
 
-**Exemple :**
-```bash
-./bin/app images:scan images
-```
+**Exceptions :** `RuntimeException` - En cas d'erreur lors du scan ou de la sauvegarde
 
 ---
 
 ### `afterExecute(ExitCode $exitCode): void`
 
+Méthode appelée après l'exécution, affiche un message de confirmation.
+
 | Paramètre | Type | Description |
 |-----------|------|-------------|
 | `$exitCode` | `ExitCode` | Code de sortie de l'exécution |
-
-**Retourne :** `void`
-
-**Description :** Méthode appelée après l'exécution principale pour afficher le message de finalisation.
 
 ---
 
@@ -119,158 +113,152 @@ echo $directive->getDescription();
 ### Cas 1 : Scan simple avec sortie JSON
 
 ```bash
-./bin/app images:scan images
+./bin/afya images:scan storage/app/public/images scan-result.json
 ```
 
-### Cas 2 : Scan avec profondeur limitée et sortie PHP array
-
-```bash
-./bin/app images:scan images 2 array
-```
-
-### Cas 3 : Scan avec filtrage d'extensions et exclusion de dossiers
-
-```bash
-./bin/app images:scan images 0 json [png,jpg] [compressed,thumbnails]
-```
-
-### Cas 4 : Scan avec génération de hash MD5
-
-```bash
-./bin/app images:scan images --hash
-```
-
-### Cas 5 : Scan en utilisant l'alias
-
-```bash
-./bin/app ims images
-```
+**Résultat :** Crée `scan-result.json` avec la liste des images trouvées
 
 ---
 
-## Gestion des erreurs
-
-| Situation | Exception | Message |
-|-----------|-----------|---------|
-| Répertoire source introuvable | `RuntimeException` | `Source directory not found: {source}` |
-| Fichier image illisible | `Exception` | `Error processing: {file} - {message}` |
-| Format de sortie invalide | (fallback) | Utilise `json` par défaut |
-
----
-
-## Intégration
-
-### Dépendances
-
-| Service | Rôle |
-|---------|------|
-| `FileSystemInterface` | Opérations sur le système de fichiers (lecture, écriture, test d'existence) |
-| `ImageStorageInterface` | Résolution des chemins de stockage |
-| `ImageExtension` | Enum des extensions d'images supportées |
-| `AbstractDirective` | Fonctionnalités de base des directives CLI |
-
-### Workflow
-
-```
-1. Utilisateur exécute la commande
-   ↓
-2. beforeExecute() vérifie le répertoire source
-   ↓
-3. execute() construit la configuration
-   ↓
-4. scanImages() collecte les images
-   ↓
-5. formatOutput() génère le contenu
-   ↓
-6. saveOutput() écrit le fichier
-   ↓
-7. afterExecute() affiche la confirmation
-```
-
----
-
-## Performance
-
-- **Complexité :** O(n) où n est le nombre de fichiers dans le répertoire
-- **Mémoire :** Les métadonnées sont collectées en mémoire avant l'écriture du fichier
-- **Optimisation :** Utilise `RecursiveIteratorIterator` pour un parcours efficace des répertoires
-- **Cache :** Aucun cache utilisé (scan direct)
-
-### Recommandations
-
-| Volume d'images | Approche recommandée |
-|-----------------|---------------------|
-| < 1000 | Scan direct sans préoccupation |
-| 1000 - 10000 | Scan acceptable, peut prendre quelques secondes |
-| > 10000 | Considérer un traitement par lots ou en arrière-plan |
-
----
-
-## Compatibilité
-
-| Version | Support |
-|---------|---------|
-| PHP 8.1+ | ✅ Complet |
-| PHP 8.2+ | ✅ Complet |
-| PHP 8.3+ | ✅ Complet |
-| PHP 8.4+ | ✅ Complet |
-| PHP 8.5+ | ✅ Complet |
-
----
-
-## Exemple complet
+### Cas 2 : Scan avec profondeur limitée
 
 ```bash
-# 1. Scan simple
-./bin/app images:scan images
-
-# 2. Scan avec tous les paramètres
-./bin/app images:scan images 2 json [png,jpg] [compressed,thumbnails] --hash --exclude-compressed
-
-# 3. Scan avec l'alias
-./bin/app ims images
-
-# 4. Résultat : un fichier scan_result_YYYY-MM-DD_HH-MM-SS.json ou .php
+./bin/afya images:scan storage/app/public/images scan-depth.json 2
 ```
 
-**Sortie générée (JSON) :**
+Seulement les images dans les 2 premiers niveaux de sous-dossiers sont incluses.
+
+---
+
+### Cas 3 : Filtrer par extensions
+
+```bash
+./bin/afya images:scan storage/app/public/images scan-png.json 0 png
+```
+
+Seulement les images PNG sont incluses.
+
+---
+
+### Cas 4 : Exclure des dossiers
+
+```bash
+./bin/afya images:scan storage/app/public/images scan-exclude.json 0 [] [compressed,thumbnails]
+```
+
+Exclut les dossiers `compressed` et `thumbnails` du scan.
+
+---
+
+### Cas 5 : Générer un fichier PHP array
+
+```bash
+./bin/afya images:scan storage/app/public/images scan-result.php
+```
+
+**Résultat :** Crée `scan-result.php` contenant un tableau PHP.
+
+---
+
+### Cas 6 : Scan avec hash MD5
+
+```bash
+./bin/afya images:scan storage/app/public/images scan-hash.json --hash
+```
+
+Ajoute le hash MD5 de chaque image dans les métadonnées.
+
+---
+
+## Structure du fichier de sortie
+
+### JSON
 ```json
 [
-  {
-    "path": "images/avatars/user1.png",
-    "filename": "user1.png",
-    "original_filename": "user1.png",
-    "extension": "png",
-    "mime_type": "image/png",
-    "size": 12345,
-    "width": 800,
-    "height": 600
-  }
+    {
+        "path": "storage/app/public/images/avatars/patient.jpg",
+        "filename": "patient.jpg",
+        "original_filename": "patient.jpg",
+        "extension": "jpg",
+        "mime_type": "image/jpeg",
+        "size": 48597,
+        "width": 800,
+        "height": 600,
+        "hash": "a1b2c3d4e5f6..."
+    }
 ]
 ```
 
-**Sortie générée (PHP array) :**
+### PHP
 ```php
 <?php
 
 return [
     [
-        'path' => 'images/avatars/user1.png',
-        'filename' => 'user1.png',
-        'original_filename' => 'user1.png',
-        'extension' => 'png',
-        'mime_type' => 'image/png',
-        'size' => 12345,
+        'path' => 'storage/app/public/images/avatars/patient.jpg',
+        'filename' => 'patient.jpg',
+        'original_filename' => 'patient.jpg',
+        'extension' => 'jpg',
+        'mime_type' => 'image/jpeg',
+        'size' => 48597,
         'width' => 800,
         'height' => 600,
-    ],
+        'hash' => 'a1b2c3d4e5f6...'
+    ]
 ];
 ```
 
----
+## Gestion des erreurs
+
+| Situation | Exception | Message |
+|-----------|-----------|---------|
+| Répertoire source inexistant | `RuntimeException` | `Source directory not found: {$source}` |
+| Extension de fichier non supportée | `RuntimeException` | `Unsupported file format: .{$extension}. Please use .json or .php` |
+| Erreur lors du traitement d'une image | Exception capturée | `⚠️ Error processing: {$file} - {$message}` |
+
+## Intégration
+
+La directive utilise :
+- `FileSystemInterface` pour toutes les opérations sur le système de fichiers
+- `ImageExtension` enum pour les extensions supportées
+- `AbstractDirective` pour l'infrastructure CLI
+
+## Performance
+
+- **Complexité** : O(n) où n est le nombre d'images
+- **Mémoire** : Stocke toutes les métadonnées en mémoire avant l'écriture
+- **Optimisation** : Pour de très grands volumes (> 10000 images), envisager un streaming
+
+## Compatibilité
+
+| Version PHP | Support |
+|-------------|---------|
+| PHP 8.1+ | ✅ Complet |
+| PHP 8.0 | ✅ Complet |
+
+## Exemple complet
+
+```bash
+# Scan complet avec toutes les options
+./bin/afya images:scan storage/app/public/images scan-full.json 1 jpg png [compressed] --hash
+
+# Utilisation avec l'alias
+./bin/afya ims storage/app/public/images scan-alias.json
+```
+
+```php
+// Exemple de code PHP pour charger le résultat
+$images = json_decode(file_get_contents('scan-result.json'), true);
+foreach ($images as $image) {
+    echo "Image: {$image['filename']} ({$image['width']}x{$image['height']})\n";
+}
+```
 
 ## Voir aussi
 
-- `CompressImagesDirective` - Directive de compression d'images
-- `ImageExtension` - Enum des extensions d'images
-- `FileSystemInterface` - Interface du système de fichiers
+- `CompressImagesDirective` - Compression des images
+- `SeedImagesDirective` - Seeding des images en base de données
+- `ImageExtension` - Types d'extensions supportées
+- `FileSystemInterface` - Interface pour les opérations système
+
+---
