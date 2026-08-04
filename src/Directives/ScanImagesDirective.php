@@ -34,6 +34,9 @@ use RuntimeException;
  * // Scan with hash generation
  * ./bin/app images:scan images scan-result.json --hash
  *
+ * // Scan with relative paths
+ * ./bin/app images:scan images scan-result.json --relative
+ *
  * // Using alias
  * ./bin/app ims images scan-result.json
  */
@@ -53,7 +56,7 @@ final class ScanImagesDirective extends AbstractDirective
                 {extensions*}#"Image extensions to include (png, jpg, webp, ...)" 
                 {excludes*}#"Directories to exclude from scan" 
                 {--hash}#"Include MD5 hash of each image" 
-                {--exclude-compressed}#"Exclude images already compressed"';
+                {--relative}#"Make paths relative to source directory"';
     }
 
     public function getAliases(): StringTypedCollection
@@ -148,7 +151,7 @@ final class ScanImagesDirective extends AbstractDirective
      *     excludes: array<string>,
      *     outputPath: string,
      *     hash: bool,
-     *     excludeCompressed: bool
+     *     relative: bool
      * }
      */
     private function buildScanConfig(): array
@@ -185,7 +188,7 @@ final class ScanImagesDirective extends AbstractDirective
             'excludes' => $excludes ?? [],
             'outputPath' => $outputPath,
             'hash' => $this->getFlag('hash'),
-            'excludeCompressed' => $this->getFlag('exclude-compressed'),
+            'relative' => $this->getFlag('relative'),
         ];
     }
 
@@ -213,8 +216,7 @@ final class ScanImagesDirective extends AbstractDirective
      * @param array{
      *     extensions: array<string>,
      *     excludes: array<string>,
-     *     depth: int,
-     *     excludeCompressed: bool
+     *     depth: int
      * } $config Scan configuration
      * @return array<int, string> List of absolute file paths
      */
@@ -243,10 +245,6 @@ final class ScanImagesDirective extends AbstractDirective
             }
 
             $extension = strtolower($file->getExtension());
-
-            if ($config['excludeCompressed'] && $this->isCompressedPath($path)) {
-                continue;
-            }
 
             if (! empty($extensions) && ! in_array($extension, $extensions, true)) {
                 continue;
@@ -285,12 +283,6 @@ final class ScanImagesDirective extends AbstractDirective
         );
     }
 
-    private function isCompressedPath(string $path): bool
-    {
-        return str_contains($path, '/compressed/')
-            || str_contains($path, '/thumbnails/');
-    }
-
     /**
      * Extracts metadata from an image file preserving directory structure.
      *
@@ -305,8 +297,19 @@ final class ScanImagesDirective extends AbstractDirective
             $imageExtension = ImageExtension::tryFrom($extension);
             $dimensions = $this->getImageDimensions($file);
 
+            $path = $file;
+
+            // Si le flag --relative est activé, rendre le chemin relatif à la source
+            if ($config['relative']) {
+                $source = $this->getArgument('source');
+                $source = rtrim($source, '/');
+                if (str_starts_with($file, $source.'/')) {
+                    $path = ltrim(substr($file, strlen($source) + 1), '/');
+                }
+            }
+
             $data = [
-                'path' => $file,
+                'path' => $path,
                 'filename' => basename($file),
                 'original_filename' => basename($file),
                 'extension' => $extension,

@@ -577,7 +577,7 @@ storage/app/public/images/        storage/app/public/compressed/
 | `{extensions*}` | Extensions d'images à inclure (ex: `png jpg webp` ou `[png,jpg]`) |
 | `{excludes*}` | Dossiers à exclure du scan |
 | `{--hash}` | Inclut le hash MD5 de chaque image |
-| `{--exclude-compressed}` | Exclut les images déjà compressées |
+| `{--relative}` | Rend les chemins relatifs au répertoire source |
 
 **Exemples :**
 
@@ -597,8 +597,8 @@ storage/app/public/images/        storage/app/public/compressed/
 # Scan avec génération de hash MD5
 ./bin/images images:scan storage/app/public/images scan-hash.json --hash
 
-# Scan avec exclusion des images compressées
-./bin/images images:scan storage/app/public/images scan.json --exclude-compressed
+# Scan avec chemins relatifs
+./bin/images images:scan storage/app/public/images scan-relative.json --relative
 
 # Sortie PHP array
 ./bin/images images:scan storage/app/public/images scan-result.php
@@ -607,15 +607,33 @@ storage/app/public/images/        storage/app/public/compressed/
 ./bin/images ims storage/app/public/images scan-result.json
 
 # Combinaison de toutes les options
-./bin/images images:scan storage/app/public/images scan-all.json 1 [png,jpg] [compressed,thumbnails] --hash
+./bin/images images:scan storage/app/public/images scan-all.json 1 [png,jpg] [compressed,thumbnails] --hash --relative
 ```
 
-**Exemple de sortie JSON :**
+**Exemple de sortie JSON (sans --relative) :**
 
 ```json
 [
   {
     "path": "storage/app/public/images/avatars/user1.png",
+    "filename": "user1.png",
+    "original_filename": "user1.png",
+    "extension": "png",
+    "mime_type": "image/png",
+    "size": 12345,
+    "width": 800,
+    "height": 600,
+    "hash": "5d41402abc4b2a76b9719d911017c592"
+  }
+]
+```
+
+**Exemple de sortie JSON (avec --relative) :**
+
+```json
+[
+  {
+    "path": "avatars/user1.png",
     "filename": "user1.png",
     "original_filename": "user1.png",
     "extension": "png",
@@ -635,7 +653,7 @@ storage/app/public/images/        storage/app/public/compressed/
 
 return [
     [
-        'path' => 'storage/app/public/images/avatars/user1.png',
+        'path' => 'avatars/user1.png',
         'filename' => 'user1.png',
         'original_filename' => 'user1.png',
         'extension' => 'png',
@@ -700,7 +718,7 @@ $ ./bin/images images:compress storage/app/public/images storage/app/public/comp
 #### Scan
 
 ```bash
-$ ./bin/images images:scan storage/app/public/images scan-result.json 2 [png,jpg] [compressed,thumbnails] --hash
+$ ./bin/images images:scan storage/app/public/images scan-result.json 2 [png,jpg] [compressed,thumbnails] --hash --relative
 
 🔍 Scanning images...
 
@@ -879,13 +897,16 @@ class ImageExportService
 # 2. Générer un inventaire avec hash MD5
 ./bin/images images:scan storage/app/public/images scan-hash.json --hash
 
-# 3. Générer un inventaire PHP pour traitement programmatique
+# 3. Générer un inventaire avec chemins relatifs
+./bin/images images:scan storage/app/public/images scan-relative.json --relative
+
+# 4. Générer un inventaire PHP pour traitement programmatique
 ./bin/images images:scan storage/app/public/images scan-result.php
 
-# 4. Analyser uniquement les JPEG/PNG en excluant les dossiers compressés
-./bin/images images:scan storage/app/public/images scan-filtered.json 0 [png,jpg] [compressed,thumbnails] --hash
+# 5. Analyser uniquement les JPEG/PNG en excluant les dossiers compressés
+./bin/images images:scan storage/app/public/images scan-filtered.json 0 [png,jpg] [compressed,thumbnails] --hash --relative
 
-# 5. Compresser les images après audit
+# 6. Compresser les images après audit
 ./bin/images images:compress storage/app/public/images storage/app/public/optimized --recursive --skip-compressed
 ```
 
@@ -1129,4 +1150,4 @@ function getThemeImage(Image $image, string $theme): ?Image
 ## Licence
 
 MIT © [Andy Defer](https://github.com/andydefer)
----
+```

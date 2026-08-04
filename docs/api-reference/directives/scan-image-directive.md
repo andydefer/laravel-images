@@ -35,7 +35,7 @@ Cette directive sert à générer un inventaire structuré des images présentes
 ```php
 $directive = new ScanImagesDirective();
 echo $directive->getSignature();
-// images:scan {source} {output} {depth=0} {extensions*} {excludes*} {--hash} {--exclude-compressed}
+// images:scan {source} {output} {depth=0} {extensions*} {excludes*} {--hash} {--relative}
 ```
 
 ---
@@ -133,10 +133,10 @@ Seulement les images dans les 2 premiers niveaux de sous-dossiers sont incluses.
 ### Cas 3 : Filtrer par extensions
 
 ```bash
-./bin/afya images:scan storage/app/public/images scan-png.json 0 png
+./bin/afya images:scan storage/app/public/images scan-png.json 0 [png,jpg]
 ```
 
-Seulement les images PNG sont incluses.
+Seulement les images PNG et JPG sont incluses.
 
 ---
 
@@ -170,13 +170,37 @@ Ajoute le hash MD5 de chaque image dans les métadonnées.
 
 ---
 
+### Cas 7 : Scan avec chemins relatifs
+
+```bash
+./bin/afya images:scan storage/app/public/images scan-relative.json --relative
+```
+
+Les chemins des images deviennent relatifs au répertoire source.
+
+**Sans `--relative` :**
+```json
+{
+    "path": "storage/app/public/images/avatars/patient.jpg"
+}
+```
+
+**Avec `--relative` :**
+```json
+{
+    "path": "avatars/patient.jpg"
+}
+```
+
+---
+
 ## Structure du fichier de sortie
 
 ### JSON
 ```json
 [
     {
-        "path": "storage/app/public/images/avatars/patient.jpg",
+        "path": "avatars/patient.jpg",
         "filename": "patient.jpg",
         "original_filename": "patient.jpg",
         "extension": "jpg",
@@ -195,7 +219,7 @@ Ajoute le hash MD5 de chaque image dans les métadonnées.
 
 return [
     [
-        'path' => 'storage/app/public/images/avatars/patient.jpg',
+        'path' => 'avatars/patient.jpg',
         'filename' => 'patient.jpg',
         'original_filename' => 'patient.jpg',
         'extension' => 'jpg',
@@ -240,10 +264,10 @@ La directive utilise :
 
 ```bash
 # Scan complet avec toutes les options
-./bin/afya images:scan storage/app/public/images scan-full.json 1 jpg png [compressed] --hash
+./bin/afya images:scan storage/app/public/images scan-full.json 1 [jpg,png] [compressed] --hash --relative
 
 # Utilisation avec l'alias
-./bin/afya ims storage/app/public/images scan-alias.json
+./bin/afya ims storage/app/public/images scan-alias.json --relative
 ```
 
 ```php
@@ -251,8 +275,16 @@ La directive utilise :
 $images = json_decode(file_get_contents('scan-result.json'), true);
 foreach ($images as $image) {
     echo "Image: {$image['filename']} ({$image['width']}x{$image['height']})\n";
+    echo "Path: {$image['path']}\n";
 }
 ```
+
+## Options disponibles
+
+| Option | Description |
+|--------|-------------|
+| `--hash` | Inclut le hash MD5 de chaque image |
+| `--relative` | Rend les chemins relatifs au répertoire source |
 
 ## Voir aussi
 
@@ -260,5 +292,4 @@ foreach ($images as $image) {
 - `SeedImagesDirective` - Seeding des images en base de données
 - `ImageExtension` - Types d'extensions supportées
 - `FileSystemInterface` - Interface pour les opérations système
-
----
+```

@@ -178,6 +178,177 @@ final class ScanImagesDirectiveTest extends IntegrationTestCase
     }
 
     // ============================================================
+    // RELATIVE PATH TESTS
+    // ============================================================
+
+    public function test_scan_with_relative_flag(): void
+    {
+        // Arrange
+        $this->createTestImage('folder1/image1.jpg', 800, 600, 'jpg');
+        $this->createTestImage('folder1/folder2/image2.jpg', 800, 600, 'jpg');
+        $this->createTestImage('image3.png', 800, 600, 'png');
+
+        $source = 'storage/app/public/images/test';
+        $outputPath = 'scan-relative.json';
+
+        // Act
+        $response = $this->service->run("images:scan {$source} {$outputPath} --relative");
+
+        // Assert
+        $this->assertSame(ExitCode::SUCCESS, $response->exit_code);
+        $this->assertStringContainsString('📊 Found: 3 images', $response->output);
+        $this->assertStringContainsString('✅ Scan completed', $response->output);
+
+        $this->assertFileExists($outputPath);
+
+        $content = json_decode(file_get_contents($outputPath), true);
+        $this->assertCount(3, $content);
+
+        // Extraire les chemins pour les vérifier indépendamment de l'ordre
+        $paths = array_column($content, 'path');
+        sort($paths);
+
+        // Vérifier que les chemins sont relatifs à la source
+        $this->assertContains('folder1/folder2/image2.jpg', $paths);
+        $this->assertContains('folder1/image1.jpg', $paths);
+        $this->assertContains('image3.png', $paths);
+    }
+
+    public function test_scan_with_relative_flag_and_depth(): void
+    {
+        // Arrange
+        $this->createTestImage('root.jpg', 800, 600, 'jpg');
+        $this->createSubDirectory('sub1');
+        $this->createTestImage('sub1/image1.jpg', 800, 600, 'jpg');
+        $this->createSubDirectory('sub1/sub2');
+        $this->createTestImage('sub1/sub2/image2.jpg', 800, 600, 'jpg');
+
+        $source = 'storage/app/public/images/test';
+        $outputPath = 'scan-relative-depth.json';
+
+        // Act
+        $response = $this->service->run("images:scan {$source} {$outputPath} 1 --relative");
+
+        // Assert
+        $this->assertSame(ExitCode::SUCCESS, $response->exit_code);
+        $this->assertStringContainsString('📊 Found: 2 images', $response->output);
+
+        $this->assertFileExists($outputPath);
+
+        $content = json_decode(file_get_contents($outputPath), true);
+        $this->assertCount(2, $content);
+
+        $this->assertEquals('root.jpg', $content[0]['path']);
+        $this->assertEquals('sub1/image1.jpg', $content[1]['path']);
+    }
+
+    public function test_scan_with_relative_flag_and_php_output(): void
+    {
+        // Arrange
+        $this->createTestImage('folder1/image1.jpg', 800, 600, 'jpg');
+
+        $source = 'storage/app/public/images/test';
+        $outputPath = 'scan-relative.php';
+
+        // Act
+        $response = $this->service->run("images:scan {$source} {$outputPath} --relative");
+
+        // Assert
+        $this->assertSame(ExitCode::SUCCESS, $response->exit_code);
+        $this->assertStringContainsString('📊 Found: 1 images', $response->output);
+
+        $this->assertFileExists($outputPath);
+
+        $data = include $outputPath;
+        $this->assertIsArray($data);
+        $this->assertCount(1, $data);
+        $this->assertEquals('folder1/image1.jpg', $data[0]['path']);
+    }
+
+    public function test_scan_with_relative_flag_and_extensions(): void
+    {
+        // Arrange
+        $this->createTestImage('image1.jpg', 800, 600, 'jpg');
+        $this->createTestImage('image2.png', 800, 600, 'png');
+        $this->createTestImage('image3.webp', 800, 600, 'png');
+
+        $source = 'storage/app/public/images/test';
+        $outputPath = 'scan-relative-ext.json';
+
+        // Act
+        $response = $this->service->run("images:scan {$source} {$outputPath} 0 [png,jpg] --relative");
+
+        // Assert
+        $this->assertSame(ExitCode::SUCCESS, $response->exit_code);
+        $this->assertStringContainsString('📊 Found: 2 images', $response->output);
+
+        $this->assertFileExists($outputPath);
+
+        $content = json_decode(file_get_contents($outputPath), true);
+        $this->assertCount(2, $content);
+
+        $paths = array_column($content, 'path');
+        sort($paths);
+
+        $this->assertContains('image1.jpg', $paths);
+        $this->assertContains('image2.png', $paths);
+        $this->assertNotContains('image3.webp', $paths);
+    }
+
+    public function test_scan_with_relative_flag_and_hash(): void
+    {
+        // Arrange
+        $this->createTestImage('folder1/image.jpg', 800, 600, 'jpg');
+
+        $source = 'storage/app/public/images/test';
+        $outputPath = 'scan-relative-hash.json';
+
+        // Act
+        $response = $this->service->run("images:scan {$source} {$outputPath}  --hash --relative");
+
+        // Assert
+        $this->assertSame(ExitCode::SUCCESS, $response->exit_code);
+        $this->assertStringContainsString('📊 Found: 1 images', $response->output);
+        $this->assertStringContainsString('💾 Output saved to:', $response->output);
+
+        $this->assertFileExists($outputPath);
+
+        $content = json_decode(file_get_contents($outputPath), true);
+        $this->assertCount(1, $content);
+
+        // Vérifier que le chemin est relatif
+        $this->assertStringContainsString('folder1/image.jpg', $content[0]['path']);
+        $this->assertStringNotContainsString('storage/app/public/images/test', $content[0]['path']);
+
+        // Vérifier la présence du hash
+        $this->assertArrayHasKey('hash', $content[0]);
+        $this->assertNotEmpty($content[0]['hash']);
+        $this->assertIsString($content[0]['hash']);
+    }
+
+    public function test_scan_without_relative_flag_uses_full_path(): void
+    {
+        // Arrange
+        $this->createTestImage('folder1/image1.jpg', 800, 600, 'jpg');
+
+        $source = 'storage/app/public/images/test';
+        $outputPath = 'scan-fullpath.json';
+
+        // Act
+        $response = $this->service->run("images:scan {$source} {$outputPath}");
+
+        // Assert
+        $this->assertSame(ExitCode::SUCCESS, $response->exit_code);
+        $this->assertStringContainsString('📊 Found: 1 images', $response->output);
+
+        $this->assertFileExists($outputPath);
+
+        $content = json_decode(file_get_contents($outputPath), true);
+        $this->assertCount(1, $content);
+        $this->assertStringContainsString('storage/app/public/images/test/folder1/image1.jpg', $content[0]['path']);
+    }
+
+    // ============================================================
     // OUTPUT FILE CUSTOM PATH TESTS
     // ============================================================
 
@@ -533,30 +704,6 @@ final class ScanImagesDirectiveTest extends IntegrationTestCase
         $this->assertEquals('root.jpg', $content[0]['filename']);
     }
 
-    public function test_scan_with_exclude_compressed_flag(): void
-    {
-        // Arrange
-        $this->createTestImage('root.jpg', 800, 600, 'jpg');
-        $this->createSubDirectory('compressed');
-        $this->createTestImage('compressed/image1.jpg', 800, 600, 'jpg');
-
-        $source = 'storage/app/public/images/test';
-        $outputPath = 'scan-excludecomp.json';
-
-        // Act
-        $response = $this->service->run("images:scan {$source} {$outputPath} --exclude-compressed");
-
-        // Assert
-        $this->assertSame(ExitCode::SUCCESS, $response->exit_code);
-        $this->assertStringContainsString('📊 Found: 1 images', $response->output);
-
-        $this->assertFileExists($outputPath);
-        $content = json_decode(file_get_contents($outputPath), true);
-
-        $this->assertCount(1, $content);
-        $this->assertEquals('root.jpg', $content[0]['filename']);
-    }
-
     // ============================================================
     // HASH TESTS
     // ============================================================
@@ -740,6 +887,28 @@ final class ScanImagesDirectiveTest extends IntegrationTestCase
         $this->assertArrayHasKey('hash', $content[0]);
     }
 
+    public function test_scan_alias_with_relative_flag(): void
+    {
+        // Arrange
+        $this->createTestImage('folder1/image.jpg', 800, 600, 'jpg');
+
+        $source = 'storage/app/public/images/test';
+        $outputPath = 'scan-alias-relative.json';
+
+        // Act
+        $response = $this->service->run("ims {$source} {$outputPath} --relative");
+
+        // Assert
+        $this->assertSame(ExitCode::SUCCESS, $response->exit_code);
+        $this->assertStringContainsString('🔍 Scanning images...', $response->output);
+        $this->assertStringContainsString('✅ Scan completed', $response->output);
+
+        $this->assertFileExists($outputPath);
+
+        $content = json_decode(file_get_contents($outputPath), true);
+        $this->assertEquals('folder1/image.jpg', $content[0]['path']);
+    }
+
     // ============================================================
     // PERFORMANCE TESTS
     // ============================================================
@@ -793,7 +962,7 @@ final class ScanImagesDirectiveTest extends IntegrationTestCase
 
         // Act
         $response = $this->service->run(
-            "images:scan {$source} {$outputPath} 1 [png,jpg] [compressed] --hash"
+            "images:scan {$source} {$outputPath} 1 [png,jpg] [compressed] --hash --relative"
         );
 
         // Assert
@@ -809,12 +978,42 @@ final class ScanImagesDirectiveTest extends IntegrationTestCase
 
         $this->assertCount(4, $content);
 
+        // Vérifier que chaque image a un hash
         foreach ($content as $image) {
             $this->assertArrayHasKey('hash', $image);
+            $this->assertNotEmpty($image['hash']);
+            $this->assertIsString($image['hash']);
+
+            // Vérifier que les chemins sont relatifs
+            $this->assertStringNotContainsString('storage/app/public/images/test/', $image['path']);
         }
 
+        // Extraire les chemins pour les vérifier indépendamment de l'ordre
+        $paths = array_column($content, 'path');
+        sort($paths);
+
+        // Vérifier que les chemins attendus sont présents
+        $expectedPaths = [
+            'root.jpg',
+            'root.png',
+            'sub1/image1.jpg',
+            'sub1/image2.png',
+        ];
+        sort($expectedPaths);
+
+        $this->assertEquals($expectedPaths, $paths);
+
+        // Vérifier que les fichiers dans 'compressed' sont exclus
         foreach ($content as $image) {
             $this->assertStringNotContainsString('/compressed/', $image['path']);
+            $this->assertStringNotContainsString('compressed', $image['path']);
         }
+
+        // Vérifier que seuls les fichiers avec les bonnes extensions sont présents
+        $extensions = array_column($content, 'extension');
+        sort($extensions);
+        $this->assertContains('jpg', $extensions);
+        $this->assertContains('png', $extensions);
+        $this->assertNotContains('webp', $extensions);
     }
 }
