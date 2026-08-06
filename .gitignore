@@ -10,6 +10,7 @@ composer.phar
 /.phpunit.cache
 *.cache
 coverage/
+.directive/
 *.coverage
 *.html
 *.log
