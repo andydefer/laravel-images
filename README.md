@@ -28,7 +28,6 @@ composer require andydefer/laravel-images
 - PHP 8.1 ou supérieur
 - Laravel 10.x, 11.x, 12.x, 13.x, 14.x ou 15.x
 - Extension GD (par défaut) ou Imagick
-- `pngquant` et `jpegoptim` pour la compression CLI (optionnel)
 
 ### Publier les migrations
 
@@ -493,75 +492,13 @@ $storage->deleteMultiple($files);
 
 ### 8.1 Installation de la CLI
 
-Le package fournit deux directives CLI pour la gestion des images :
+Le package fournit une directive CLI pour la gestion des images :
 
 | Directive | Alias | Description |
 |-----------|-------|-------------|
-| `images:compress` | `imc` | Compresse les images avec pngquant et jpegoptim |
 | `images:scan` | `ims` | Scanne un dossier et génère un inventaire JSON ou PHP |
 
-### 8.2 Commande de compression
-
-```bash
-./bin/images images:compress {source} {destination} {--options}
-```
-
-**Paramètres :**
-
-| Paramètre | Description |
-|-----------|-------------|
-| `{source}` | Dossier source contenant les images à compresser |
-| `{destination}` | Dossier de destination (obligatoire) |
-| `{png-quality=45-50}` | Plage de qualité PNG (min-max, ex: 30-40) |
-| `{jpg-quality=50}` | Qualité JPEG (0-100) |
-| `{max-size=0}` | Ignorer les images plus petites que N KB (0 = désactivé) |
-| `{--strip-meta}` | Supprime les métadonnées (Exif, commentaires, etc.) |
-| `{--recursive}` | Traite les sous-dossiers récursivement et conserve la structure |
-| `{--dry-run}` | Simule la compression sans modifier les fichiers |
-| `{--force}` | Force l'écrasement des fichiers existants |
-| `{--skip-compressed}` | Ignore les images déjà compressées |
-
-**Exemples :**
-
-```bash
-# Compression simple
-./bin/images images:compress storage/app/public/images storage/app/public/compressed
-
-# Compression récursive avec conservation de la structure
-./bin/images images:compress storage/app/public/images storage/app/public/compressed --recursive
-
-# Compression avec paramètres avancés
-./bin/images images:compress storage/app/public/images storage/app/public/compressed --recursive --strip-meta --png-quality=30-40 --jpg-quality=40
-
-# Ignorer les images déjà compressées
-./bin/images images:compress storage/app/public/images storage/app/public/compressed --skip-compressed
-
-# Ignorer les images plus petites que 50KB
-./bin/images images:compress storage/app/public/images storage/app/public/compressed max-size=50
-
-# Simulation (dry-run)
-./bin/images images:compress storage/app/public/images storage/app/public/compressed --dry-run --recursive
-
-# Utilisation de l'alias
-./bin/images imc storage/app/public/images storage/app/public/compressed --recursive
-```
-
-**Conservation de la structure :**
-
-Avec l'option `--recursive`, la structure des dossiers est préservée :
-
-```
-Source :                          Destination :
-storage/app/public/images/        storage/app/public/compressed/
-├── avatars/                      ├── avatars/
-│   └── patient.jpg               │   └── patient.jpg
-├── banners/                      ├── banners/
-│   └── hero.png                  │   └── hero.png
-└── gallery/                      └── gallery/
-    └── photo.jpg                     └── photo.jpg
-```
-
-### 8.3 Commande de scan
+### 8.2 Commande de scan
 
 ```bash
 ./bin/images images:scan {source} {output} {depth=0} {extensions*} {excludes*} {--options}
@@ -666,56 +603,7 @@ return [
 ];
 ```
 
-### 8.4 Prérequis système pour la compression
-
-Les outils suivants doivent être installés sur le système pour la compression :
-
-```bash
-# Ubuntu/Debian
-sudo apt install pngquant jpegoptim
-
-# macOS
-brew install pngquant jpegoptim
-```
-
-### 8.5 Détection des images déjà compressées
-
-La directive de compression détecte automatiquement les images déjà compressées via :
-
-- **Taille** : Images < 10KB considérées comme compressées
-- **JPEG** : Absence de métadonnées Exif
-- **PNG** : Ratio de métadonnées faible (chunks standards)
-
-### 8.6 Exemple de sortie
-
-#### Compression
-
-```bash
-$ ./bin/images images:compress storage/app/public/images storage/app/public/compressed --skip-compressed --recursive
-
-📷 Starting image compression...
-
-✅ Source directory: storage/app/public/images
-📁 Found 42 images to process
-
-   ✅ avatars/photo1.jpg - saved 120.5 KB (65.2%)
-   ⏭️  banners/photo2.png - already compressed, skipping
-   ✅ gallery/photo3.jpg - saved 45.2 KB (52.8%)
-   ⏭️  avatars/photo4.png - already compressed, skipping
-
-⏭️  Skipped 12 already compressed images
-
-📊 Summary:
-   📁 Files processed: 30
-   ⏭️  Files skipped: 12
-   📦 Size before: 15.24 MB
-   📦 Size after: 5.67 MB
-   💾 Space saved: 9.57 MB (62.8%)
-
-✅ Compression completed
-```
-
-#### Scan
+### 8.3 Exemple de sortie du scan
 
 ```bash
 $ ./bin/images images:scan storage/app/public/images scan-result.json 2 [png,jpg] [compressed,thumbnails] --hash --relative
@@ -905,21 +793,6 @@ class ImageExportService
 
 # 5. Analyser uniquement les JPEG/PNG en excluant les dossiers compressés
 ./bin/images images:scan storage/app/public/images scan-filtered.json 0 [png,jpg] [compressed,thumbnails] --hash --relative
-
-# 6. Compresser les images après audit
-./bin/images images:compress storage/app/public/images storage/app/public/optimized --recursive --skip-compressed
-```
-
-### 9.5 Compression via CLI
-
-```bash
-# Compression optimisée pour le web avec conservation de la structure
-./bin/images images:compress storage/app/public/images storage/app/public/optimized \
-    --recursive \
-    --strip-meta \
-    --png-quality=30-40 \
-    --jpg-quality=40 \
-    --skip-compressed
 ```
 
 ---
@@ -1150,4 +1023,4 @@ function getThemeImage(Image $image, string $theme): ?Image
 ## Licence
 
 MIT © [Andy Defer](https://github.com/andydefer)
-```
+---
