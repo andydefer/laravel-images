@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace AndyDefer\LaravelImages\Records;
 
 use AndyDefer\DomainStructures\Abstracts\AbstractRecord;
-use AndyDefer\LaravelImages\Enums\ImageExtension;
-use AndyDefer\LaravelImages\Enums\ImageMimeType;
 use AndyDefer\LaravelImages\Enums\ImageType;
 use AndyDefer\LaravelImages\ValueObjects\ImageMetadataVO;
+use AndyDefer\LaravelUtils\Enums\ImageExtension;
+use AndyDefer\LaravelUtils\Enums\ImageMimeType;
 use AndyDefer\PhpVo\ValueObjects\DateTimeVO;
 
 /**

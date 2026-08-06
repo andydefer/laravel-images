@@ -5,12 +5,12 @@ declare(strict_types=1);
 namespace AndyDefer\LaravelImages\Tests\Integration\Database\Factories;
 
 use AndyDefer\LaravelImages\Database\Factories\ImageFactory;
-use AndyDefer\LaravelImages\Enums\ImageExtension;
 use AndyDefer\LaravelImages\Enums\ImageType;
 use AndyDefer\LaravelImages\Models\Album;
 use AndyDefer\LaravelImages\Models\Image;
 use AndyDefer\LaravelImages\Tests\Fixtures\Models\TestUser;
 use AndyDefer\LaravelImages\Tests\IntegrationTestCase;
+use AndyDefer\LaravelUtils\Enums\ImageExtension;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**

@@ -7,9 +7,9 @@ namespace AndyDefer\LaravelImages\Records;
 use AndyDefer\DomainStructures\Abstracts\AbstractRecord;
 use AndyDefer\DomainStructures\Collections\Utility\StringTypedCollection;
 use AndyDefer\LaravelImages\Collections\ImageTypeCollection;
-use AndyDefer\LaravelImages\Enums\ImageExtension;
-use AndyDefer\LaravelImages\Enums\ImageMimeType;
 use AndyDefer\LaravelImages\Enums\ImageType;
+use AndyDefer\LaravelUtils\Enums\ImageExtension;
+use AndyDefer\LaravelUtils\Enums\ImageMimeType;
 use AndyDefer\PhpVo\ValueObjects\DateTimeVO;
 
 final class ImageFilterRecord extends AbstractRecord

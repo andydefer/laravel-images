@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace AndyDefer\LaravelImages\Database\Factories;
 
-use AndyDefer\LaravelImages\Enums\ImageExtension;
 use AndyDefer\LaravelImages\Enums\ImageType;
 use AndyDefer\LaravelImages\Models\Image;
+use AndyDefer\LaravelUtils\Enums\ImageExtension;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Eloquent\Model;
 

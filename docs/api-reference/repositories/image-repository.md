@@ -102,7 +102,7 @@ $galleryImages = $repository->findBy($findBy);
 Recherche des images avec des critères de taille et d'extension.
 
 ```php
-use AndyDefer\LaravelImages\Enums\ImageExtension;
+use AndyDefer\LaravelUtils\Enums\ImageExtension;
 
 $filter = ImageFilterRecord::from([
     'extension' => ImageExtension::WEBP,
@@ -239,7 +239,7 @@ final class ImageService
 
 declare(strict_types=1);
 
-use AndyDefer\LaravelImages\Enums\ImageExtension;
+use AndyDefer\LaravelUtils\Enums\ImageExtension;
 use AndyDefer\LaravelImages\Enums\ImageType;
 use AndyDefer\LaravelImages\Records\ImageFilterRecord;
 use AndyDefer\LaravelImages\Repositories\ImageRepository;

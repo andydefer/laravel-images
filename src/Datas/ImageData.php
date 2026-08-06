@@ -6,11 +6,11 @@ namespace AndyDefer\LaravelImages\Datas;
 
 use AndyDefer\DomainStructures\Abstracts\AbstractData;
 use AndyDefer\DomainStructures\Collections\Utility\StringTypedCollection;
-use AndyDefer\LaravelImages\Enums\ImageExtension;
-use AndyDefer\LaravelImages\Enums\ImageMimeType;
 use AndyDefer\LaravelImages\Enums\ImageType;
 use AndyDefer\LaravelImages\ValueObjects\ImageMetadataVO;
 use AndyDefer\LaravelImages\ValueObjects\ImagePathVO;
+use AndyDefer\LaravelUtils\Enums\ImageExtension;
+use AndyDefer\LaravelUtils\Enums\ImageMimeType;
 use AndyDefer\PhpVo\ValueObjects\DateTimeVO;
 
 /**

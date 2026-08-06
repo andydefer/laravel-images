@@ -6,13 +6,13 @@ namespace AndyDefer\LaravelImages\Tests\Integration\Repositories;
 
 use AndyDefer\DomainStructures\Collections\Utility\StringTypedCollection;
 use AndyDefer\LaravelImages\Collections\ImageTypeCollection;
-use AndyDefer\LaravelImages\Enums\ImageExtension;
-use AndyDefer\LaravelImages\Enums\ImageMimeType;
 use AndyDefer\LaravelImages\Enums\ImageType;
 use AndyDefer\LaravelImages\Models\Image;
 use AndyDefer\LaravelImages\Records\ImageFilterRecord;
 use AndyDefer\LaravelImages\Repositories\ImageRepository;
 use AndyDefer\LaravelImages\Tests\IntegrationTestCase;
+use AndyDefer\LaravelUtils\Enums\ImageExtension;
+use AndyDefer\LaravelUtils\Enums\ImageMimeType;
 use AndyDefer\Repository\Records\FindByRecord;
 use AndyDefer\Repository\ValueObjects\SortColumns;
 use Illuminate\Foundation\Testing\DatabaseMigrations;

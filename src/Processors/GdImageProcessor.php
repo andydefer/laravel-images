@@ -6,8 +6,8 @@ namespace AndyDefer\LaravelImages\Processors;
 
 use AndyDefer\LaravelImages\Contracts\Processors\ImageProcessorInterface;
 use AndyDefer\LaravelImages\Contracts\Storage\ImageStorageInterface;
-use AndyDefer\LaravelImages\Enums\ImageExtension;
 use AndyDefer\LaravelImages\ValueObjects\ImagePathVO;
+use AndyDefer\LaravelUtils\Enums\ImageExtension;
 use AndyDefer\PhpServices\Contracts\FileSystemInterface;
 use Intervention\Image\ImageManager;
 use RuntimeException;

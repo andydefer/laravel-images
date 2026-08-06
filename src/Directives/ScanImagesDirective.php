@@ -7,7 +7,7 @@ namespace AndyDefer\LaravelImages\Directives;
 use AndyDefer\Directive\AbstractDirective;
 use AndyDefer\Directive\Enums\ExitCode;
 use AndyDefer\DomainStructures\Collections\Utility\StringTypedCollection;
-use AndyDefer\LaravelImages\Enums\ImageExtension;
+use AndyDefer\LaravelUtils\Enums\ImageExtension;
 use AndyDefer\PhpServices\Contracts\FileSystemInterface;
 use Illuminate\Support\Collection;
 use RuntimeException;
