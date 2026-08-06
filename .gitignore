@@ -84,6 +84,7 @@ temp/
 /docs/work-summaries/
 /docs/diffs/
 /prompts/
+/config/utils.php
 /all.txt
 diff.txt
 CHANGED_FILES.md
