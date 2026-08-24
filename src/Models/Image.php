@@ -8,7 +8,7 @@ use AndyDefer\LaravelImages\Database\Factories\ImageFactory;
 use AndyDefer\LaravelImages\Enums\ImageType;
 use AndyDefer\LaravelImages\ValueObjects\ImageMetadataVO;
 use AndyDefer\LaravelImages\ValueObjects\ImagePathVO;
-use AndyDefer\LaravelUtils\Proxies\AttributeProxy;
+use AndyDefer\Repository\Proxies\AttributeProxy;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
