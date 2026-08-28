@@ -23,7 +23,7 @@
         "php": "^8.2",
         "laravel/framework": "^12.0|^13.0|^14.0|^15.0",
         "intervention/image": "^3.0",
-        "andydefer/laravel-utils": "^0.10.21"
+        "andydefer/laravel-utils": "^0.10.22"
     },
     "require-dev": {
         "barryvdh/laravel-ide-helper": "^3.6",
