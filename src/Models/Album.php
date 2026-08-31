@@ -39,10 +39,10 @@ use Illuminate\Support\Carbon;
  *
  * // Computed attributes
  * @property-read int $image_count
+ * @property-read Collection<int, Image> $images
  *
  * // Relations
  * @property-read Model|null $albumable
- * @property-read Collection<int, Image> $images
  * @property-read Image|null $coverImage
  */
 final class Album extends Model
@@ -69,6 +69,10 @@ final class Album extends Model
         'albumable_id',
     ];
 
+    protected $appends = [
+        'image_count',
+    ];
+
     protected $casts = [
         'metadata' => ClusterCast::class,
         'is_public' => BinaryChoice::class,
@@ -76,6 +80,11 @@ final class Album extends Model
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
         'deleted_at' => 'datetime',
+    ];
+
+    protected $with = [
+        'coverImage',
+        'images',
     ];
 
     protected static function newFactory(): AlbumFactory

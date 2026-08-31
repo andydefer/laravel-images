@@ -49,6 +49,7 @@ use Illuminate\Support\Carbon;
  * @property-read string $file_size_for_humans
  * @property-read string $dimensions
  * @property-read bool $has_inverse
+ * @property-read ImagePathVO|null $inversed_image_path
  *
  * // Relations
  * @property-read Model|null $imageable
@@ -86,6 +87,14 @@ final class Image extends Model
         'uploaded_by_id',
         'imageable_type',
         'imageable_id',
+    ];
+
+    protected $appends = [
+        'full_url',
+        'file_size_for_humans',
+        'dimensions',
+        'has_inverse',
+        'inversed_image_path',
     ];
 
     protected $casts = [
@@ -157,15 +166,40 @@ final class Image extends Model
     }
 
     /**
-     * Get the path of the inverse image (dark/light variant).
-     * If no inverse image exists, returns null.
+     * Get the path of the inverse image (dark/light variant) based on filename convention.
+     * No extra database query - uses filename replacement.
+     *
+     * @return Attribute<ImagePathVO|null, never>
+     */
+    /**
+     * Get the path of the inverse image (dark/light variant) based on filename convention.
+     * No extra database query - uses filename replacement.
      *
      * @return Attribute<ImagePathVO|null, never>
      */
     protected function inversedImagePath(): Attribute
     {
         return Attribute::make(
-            get: fn (): ?ImagePathVO => $this->inverseImage?->path
+            get: function (): ?ImagePathVO {
+                $filename = $this->filename;
+                $path = $this->path;
+
+                // ✅ Générer le nom du fichier inverse
+                $inverseFilename = match (true) {
+                    str_contains($filename, 'light') => str_replace('light', 'dark', $filename),
+                    str_contains($filename, 'dark') => str_replace('dark', 'light', $filename),
+                    default => null,
+                };
+
+                if ($inverseFilename === null) {
+                    return null;
+                }
+
+                // ✅ Construire le chemin inverse sans requête SQL
+                $inversePath = str_replace($filename, $inverseFilename, $path->getValue());
+
+                return new ImagePathVO($inversePath);
+            }
         );
     }
 
