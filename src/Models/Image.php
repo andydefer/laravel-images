@@ -225,7 +225,7 @@ final class Image extends Model
     protected function fullUrl(): Attribute
     {
         return Attribute::make(
-            get: fn (): string => asset('storage/'.$this->path),
+            get: fn (): string => asset($this->path),
         );
     }
 

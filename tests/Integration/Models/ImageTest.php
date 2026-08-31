@@ -163,7 +163,7 @@ final class ImageTest extends IntegrationTestCase
             ->withPath('images/gallery/photo.jpg')
             ->create();
 
-        $this->assertStringContainsString('storage/images/gallery/photo.jpg', $image->full_url);
+        $this->assertStringContainsString('http://localhost/images/gallery/photo.jpg', $image->full_url);
     }
 
     /**
@@ -470,6 +470,6 @@ final class ImageTest extends IntegrationTestCase
         $this->assertSame((string) $uploader->id, $imageData->uploadedById);
         $this->assertInstanceOf(DateTimeVO::class, $imageData->createdAt);
         $this->assertInstanceOf(DateTimeVO::class, $imageData->updatedAt);
-        $this->assertStringContainsString('storage/images/logo-light.png', $imageData->fullUrl);
+        $this->assertStringContainsString('http://localhost/images/logo-light.png', $imageData->fullUrl);
     }
 }

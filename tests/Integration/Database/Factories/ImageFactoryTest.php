@@ -624,7 +624,7 @@ final class ImageFactoryTest extends IntegrationTestCase
         $image = $this->factory->withPath('images/test/image.jpg')->create();
 
         // Assert: Verify the full URL attribute
-        $this->assertStringContainsString('storage/images/test/image.jpg', $image->full_url);
+        $this->assertStringContainsString('http://localhost/images/test/image.jpg', $image->full_url);
     }
 
     public function test_image_has_file_size_for_humans_attribute(): void
@@ -763,7 +763,7 @@ final class ImageFactoryTest extends IntegrationTestCase
         $this->assertEquals($admin->getKey(), $image->uploaded_by_id);
 
         // Assert: Verify computed attributes
-        $this->assertStringContainsString('storage/', $image->full_url);
+        $this->assertStringContainsString('http://localhost', $image->full_url);
         $this->assertEquals('2 MB', $image->file_size_for_humans);
         $this->assertEquals('800x800', $image->dimensions);
 
