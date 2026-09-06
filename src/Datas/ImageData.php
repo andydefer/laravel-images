@@ -26,7 +26,7 @@ use AndyDefer\PhpVo\ValueObjects\DateTimeVO;
  * @property-read ImageType $type
  * @property-read ImageMetadataVO|null $metadata
  * @property-read string $imageableType
- * @property-read int $imageableId
+ * @property-read string $imageableId
  * @property-read int|null $width
  * @property-read int|null $height
  * @property-read int $order
@@ -55,7 +55,7 @@ final class ImageData extends AbstractData
         public readonly ImageType $type,
         public readonly ?ImageMetadataVO $metadata,
         public readonly string $imageableType,
-        public readonly int $imageableId,
+        public readonly string $imageableId,
         public readonly ?int $width,
         public readonly ?int $height,
         public readonly int $order,

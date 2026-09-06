@@ -466,7 +466,7 @@ final class ImageTest extends IntegrationTestCase
         $this->assertSame(ImageType::LOGO, $imageData->type);
         $this->assertNotNull($imageData->inversedImagePath);
         $this->assertSame('images/logo-dark.png', (string) $imageData->inversedImagePath);
-        $this->assertSame($parent->id, $imageData->imageableId);
+        $this->assertSame((string) $parent->id, $imageData->imageableId);
         $this->assertSame((string) $uploader->id, $imageData->uploadedById);
         $this->assertInstanceOf(DateTimeVO::class, $imageData->createdAt);
         $this->assertInstanceOf(DateTimeVO::class, $imageData->updatedAt);
