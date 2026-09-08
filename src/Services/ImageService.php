@@ -67,13 +67,14 @@ final class ImageService implements ImageServiceInterface
         $this->validateFile($file, $type);
 
         $options ??= new ImageOptionsRecord;
-        $storagePath = $this->storeFile($file, $imageable, $type);
         $dimensions = $this->extractImageDimensions($file);
         $metadata = $this->buildMetadataFromOptions($options);
+        $storagePath = $this->storeFile($file, $imageable, $type);
+        $originalFilename = $file->getClientOriginalName();
 
         $imageRecord = $this->buildImageRecord(
-            file: $file,
             storagePath: $storagePath,
+            originalFilename: $originalFilename,
             imageable: $imageable,
             uploadedBy: $uploadedBy,
             type: $type,
@@ -384,8 +385,8 @@ final class ImageService implements ImageServiceInterface
      * Constructs a complete ImageRecord from upload parameters.
      */
     private function buildImageRecord(
-        UploadedFile $file,
         string $storagePath,
+        string $originalFilename,
         Model $imageable,
         ?Model $uploadedBy,
         ImageType $type,
@@ -393,13 +394,15 @@ final class ImageService implements ImageServiceInterface
         ?ImageMetadataVO $metadata,
         array $dimensions,
     ): ImageRecord {
+        $fullPath = $this->storage->getFullPath($storagePath);
+
         return ImageRecord::from([
             'path' => $storagePath,
-            'filename' => $file->hashName(),
-            'original_filename' => $file->getClientOriginalName(),
-            'extension' => $file->getClientOriginalExtension(),
-            'mime_type' => $file->getMimeType(),
-            'size' => $this->getFileSize($file),
+            'filename' => basename($storagePath),
+            'original_filename' => $originalFilename,
+            'extension' => pathinfo($storagePath, PATHINFO_EXTENSION),
+            'mime_type' => mime_content_type($fullPath),
+            'size' => filesize($fullPath),
             'width' => $dimensions['width'] ?? null,
             'height' => $dimensions['height'] ?? null,
             'type' => $type,
@@ -490,7 +493,14 @@ final class ImageService implements ImageServiceInterface
     private function storeFile(UploadedFile $file, Model $imageable, ImageType $type): string
     {
         $path = $this->buildStoragePath($imageable, $type);
-        $filename = $file->hashName();
+        $originalName = pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME);
+        $extension = $file->getClientOriginalExtension();
+        $filename = $originalName.'.'.$extension;
+
+        // Vérifier si un fichier avec ce nom existe déjà
+        if ($this->storage->exists($path.'/'.$filename)) {
+            $filename = $file->hashName();
+        }
 
         return $this->storage->store($file, $path, $filename);
     }
@@ -502,7 +512,7 @@ final class ImageService implements ImageServiceInterface
     {
         return sprintf(
             '%s/%s/%s',
-            $imageable->getMorphClass(),
+            str_replace('\\', '.', $imageable->getMorphClass()),
             $imageable->getKey(),
             $type->value,
         );
@@ -513,7 +523,7 @@ final class ImageService implements ImageServiceInterface
      */
     private function getPublicUrl(string $path): string
     {
-        return asset('storage/'.$path);
+        return asset($path);
     }
 
     /**
