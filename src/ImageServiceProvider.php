@@ -7,6 +7,8 @@ namespace AndyDefer\LaravelImages;
 use AndyDefer\LaravelImages\Configs\ImagesConfig;
 use AndyDefer\LaravelImages\Contracts\Configs\ImagesConfigInterface;
 use AndyDefer\LaravelImages\Contracts\Processors\ImageProcessorInterface;
+use AndyDefer\LaravelImages\Contracts\Repositories\AlbumRepositoryInterface;
+use AndyDefer\LaravelImages\Contracts\Repositories\ImageRepositoryInterface;
 use AndyDefer\LaravelImages\Contracts\Services\AlbumServiceInterface;
 use AndyDefer\LaravelImages\Contracts\Services\ImageServiceInterface;
 use AndyDefer\LaravelImages\Contracts\Storage\ImageStorageInterface;
@@ -26,15 +28,9 @@ use Illuminate\Support\ServiceProvider;
 
 /**
  * Laravel service provider for the Images package.
- *
- * Registers all services, repositories, and implementations
- * with the Laravel service container.
  */
 final class ImageServiceProvider extends ServiceProvider
 {
-    /**
-     * Register services in the container.
-     */
     public function register(): void
     {
         $this->registerConfig();
@@ -45,9 +41,6 @@ final class ImageServiceProvider extends ServiceProvider
         $this->registerServices();
     }
 
-    /**
-     * Boot services after registration.
-     */
     public function boot(): void
     {
         $this->registerObservers();
@@ -55,9 +48,6 @@ final class ImageServiceProvider extends ServiceProvider
         $this->publishAssets();
     }
 
-    /**
-     * Registers configuration bindings.
-     */
     private function registerConfig(): void
     {
         $this->app->singleton(
@@ -66,9 +56,6 @@ final class ImageServiceProvider extends ServiceProvider
         );
     }
 
-    /**
-     * Registers filesystem bindings.
-     */
     private function registerFileSystem(): void
     {
         $this->app->singleton(
@@ -77,9 +64,6 @@ final class ImageServiceProvider extends ServiceProvider
         );
     }
 
-    /**
-     * Registers storage bindings.
-     */
     private function registerStorage(): void
     {
         $this->app->singleton(
@@ -95,18 +79,22 @@ final class ImageServiceProvider extends ServiceProvider
         );
     }
 
-    /**
-     * Registers repository bindings.
-     */
     private function registerRepositories(): void
     {
         $this->app->singleton(ImageRepository::class);
         $this->app->singleton(AlbumRepository::class);
+
+        $this->app->bind(
+            ImageRepositoryInterface::class,
+            ImageRepository::class
+        );
+
+        $this->app->bind(
+            AlbumRepositoryInterface::class,
+            AlbumRepository::class
+        );
     }
 
-    /**
-     * Registers image processor bindings.
-     */
     private function registerImageProcessor(): void
     {
         $this->app->singleton(
@@ -123,12 +111,8 @@ final class ImageServiceProvider extends ServiceProvider
         );
     }
 
-    /**
-     * Registers service bindings (interfaces and implementations).
-     */
     private function registerServices(): void
     {
-        // Image Service
         $this->app->singleton(
             ImageServiceInterface::class,
             ImageService::class
@@ -138,14 +122,13 @@ final class ImageServiceProvider extends ServiceProvider
             ImageService::class,
             function ($app): ImageService {
                 return new ImageService(
-                    $app->make(ImageRepository::class),
+                    $app->make(ImageRepositoryInterface::class),
                     $app->make(ImageProcessorInterface::class),
                     $app->make(ImageStorageInterface::class)
                 );
             }
         );
 
-        // Album Service
         $this->app->singleton(
             AlbumServiceInterface::class,
             AlbumService::class
@@ -155,25 +138,19 @@ final class ImageServiceProvider extends ServiceProvider
             AlbumService::class,
             function ($app): AlbumService {
                 return new AlbumService(
-                    $app->make(AlbumRepository::class),
+                    $app->make(AlbumRepositoryInterface::class),
                     $app->make(ImageService::class)
                 );
             }
         );
     }
 
-    /**
-     * Registers model observers.
-     */
     private function registerObservers(): void
     {
         Album::observe(AlbumObserver::class);
         Image::observe(ImageObserver::class);
     }
 
-    /**
-     * Loads package migrations if running in console.
-     */
     private function loadMigrations(): void
     {
         if ($this->app->runningInConsole()) {
@@ -181,9 +158,6 @@ final class ImageServiceProvider extends ServiceProvider
         }
     }
 
-    /**
-     * Publishes package assets for consumption.
-     */
     private function publishAssets(): void
     {
         $this->publishes([
